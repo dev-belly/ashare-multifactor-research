@@ -1,0 +1,31 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+.env
+.DS_Store
+.idea/
+.vscode/
+*.log
+.ipynb_checkpoints/
+
+# ===== 项目内部目录（不入库） =====
+.workbuddy/
+
+# ===== 大数据文件（由流水线生成，不入库） =====
+*.pkl
+*.parquet
+*.csv
+*.pdf
+*.png
+
+# 数据缓存（拉取后生成）
+data/raw/
+data/processed/
+data/factors/
+
+# 生成产物（回测/评估输出）
+outputs/logs/
+outputs/results/
+outputs/figures/
