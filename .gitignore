@@ -38,3 +38,7 @@ frontend/dist/
 
 # ===== uv 锁定文件（提交以保证可复现安装） =====
 # uv.lock 已入库
+
+# GitHub Actions 工作流：当前部署令牌缺少 workflow OAuth scope，
+# 故暂不入库。如需启用 CI，请用具 workflow scope 的令牌 git add 后推送。
+.github/workflows/
