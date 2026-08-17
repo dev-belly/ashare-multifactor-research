@@ -1,0 +1,26 @@
+site_name: FactorLab 文档
+site_description: A股多因子研究与样本外回测平台
+repo_url: https://github.com/dev-belly/ashare-multifactor-research
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/weather-night
+        name: 夜间
+  features:
+    - navigation.sections
+    - content.code.copy
+nav:
+  - 首页: index.md
+  - 快速开始: quickstart.md
+  - 方法论: methodology.md
+  - 因子字典: data_dictionary.md
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.details
+  - toc:
+      permalink: true

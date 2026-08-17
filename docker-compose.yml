@@ -1,0 +1,15 @@
+services:
+  factorlab:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: factorlab:0.2.0
+    container_name: factorlab
+    ports:
+      - "8000:8000"
+    environment:
+      - FACTORLAB_NATIVE_LGB=1
+    volumes:
+      # 保留生成的结果与日志（可选）
+      - ./outputs:/app/outputs
+    restart: unless-stopped

@@ -53,6 +53,15 @@ models:
     num_leaves: 31
     reg_alpha: 0.1
     reg_lambda: 0.1
+  deep:                      # 深度学习因子模型（PyTorch MLP + Optuna HPO）
+    enabled: true
+    hidden_dims: [64, 32]
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 0.0001
+    epochs: 60
+    batch_size: 512
+    hpo_trials: 12           # Optuna 超参搜索 trial 数（0 表示关闭）
 
 # 评估
 evaluation:
@@ -81,3 +90,10 @@ visualization:
   style: 'seaborn-v0_8-whitegrid'
   palette: 'Set2'
   fig_dir: 'outputs/figures'
+
+# 服务化（FastAPI）
+service:
+  host: '0.0.0.0'
+  port: 8000
+  results_dir: 'outputs/results'   # 预计算结果 JSON 目录
+  reload: false

@@ -1,0 +1,51 @@
+[project]
+name = "factorlab"
+version = "0.2.0"
+description = "A股多因子研究平台：因子工程、样本外回测、深度学习因子模型与服务化"
+readme = "README.md"
+authors = [{ name = "factorlab" }]
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "scikit-learn>=1.4",
+    "statsmodels>=0.14",
+    "lightgbm>=4.3",
+    "pyarrow>=15",
+    "pyyaml>=6.0",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "polars>=0.20",
+    "duckdb>=0.10",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "typer>=0.12",
+    "rich>=13.7",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+    "torch>=2.2",
+    "optuna>=3.6",
+]
+
+[project.optional-dependencies]
+data-akshare = ["akshare>=1.12"]
+
+[project.scripts]
+factorlab = "factorlab.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["factorlab"]
+
+[tool.uv]
+package = true
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.4", "mkdocs-material>=9.5"]

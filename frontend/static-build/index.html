@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FactorLab · A股多因子研究与样本外回测平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: { 900: "#0a0e17", 800: "#0f1623", 700: "#161f30", 600: "#1e2940", 500: "#2a3650" },
+              accent: { DEFAULT: "#3b82f6", glow: "#60a5fa" },
+              bull: "#ef4444",
+              bear: "#22c55e",
+            },
+          },
+        },
+      };
+    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <style>
+      :root { color-scheme: dark; }
+      html, body, #root { height: 100%; }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 800px at 20% -10%, #14213a 0%, #0a0e17 55%, #070a11 100%);
+        color: #e5edf7;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-thumb { background: #243049; border-radius: 6px; }
+      .card { border-radius: 0.75rem; border: 1px solid rgba(30,41,64,0.6); background: rgba(15,22,35,0.7); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+      .stat-value { font-size: 1.5rem; font-weight: 600; font-family: ui-monospace, monospace; letter-spacing: -0.02em; }
+      .pill { display: inline-flex; align-items: center; border-radius: 9999px; border: 1px solid #2a3650; padding: 0.125rem 0.625rem; font-size: 0.75rem; color: #cbd5e1; }
+      .tab-active { color: #60a5fa; border-color: #3b82f6; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" src="app.js"></script>
+  </body>
+</html>

@@ -29,3 +29,12 @@ data/factors/
 outputs/logs/
 outputs/results/
 outputs/figures/
+
+# ===== 前端构建产物 =====
+node_modules/
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# ===== uv 锁定文件（提交以保证可复现安装） =====
+# uv.lock 已入库
