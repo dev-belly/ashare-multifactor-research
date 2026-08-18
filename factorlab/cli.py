@@ -59,6 +59,18 @@ def config():
 
 
 @app.command()
+def report(
+    out: str = typer.Option(None, "--out", "-o", help="报告输出路径，默认 outputs/results/report.html"),
+):
+    """根据 results.json 生成自包含 HTML 研究报告（可双击打开）。"""
+    from factorlab.report import build_report_from_config
+
+    rprint("[bold green]▶ 生成量化研究报告[/bold green]")
+    path = build_report_from_config(out_path=out)
+    rprint(f"[bold green]✔ 报告已生成：{path}[/bold green]")
+
+
+@app.command()
 def version():
     """打印版本。"""
     rprint("factorlab 0.2.0")

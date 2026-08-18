@@ -42,3 +42,6 @@ frontend/dist/
 # GitHub Actions 工作流：当前部署令牌缺少 workflow OAuth scope，
 # 故暂不入库。如需启用 CI，请用具 workflow scope 的令牌 git add 后推送。
 .github/workflows/
+
+# 生成的研究报告（由 `factorlab report` 产出，发布到 gh-pages 作为在线 Demo）
+outputs/results/report.html

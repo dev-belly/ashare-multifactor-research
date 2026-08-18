@@ -262,6 +262,102 @@ function Empty({ text }) {
   );
 }
 
+/* ---------- 亮点组件 ---------- */
+function KpiHero({ results }) {
+  const nav = results.model_nav || {};
+  const models = Object.keys(nav);
+  let bestSharpe = null, bestRet = null;
+  models.forEach((k) => {
+    const p = nav[k].perf || {};
+    if (!bestSharpe || (p.sharpe || -1e9) > (bestSharpe.p.sharpe || -1e9)) bestSharpe = { k, p };
+    if (!bestRet || (p.annual_return || -1e9) > (bestRet.p.annual_return || -1e9)) bestRet = { k, p };
+  });
+  const ic = (results.ic_summary || []).slice().sort((a, b) => Math.abs(b.ir) - Math.abs(a.ir));
+  const top = ic[0] || {};
+  const MODEL_LABEL = { eq_weight: "等权复合", elastic_net: "ElasticNet", lightgbm: "LightGBM", deep: "深度学习" };
+  const cards = [
+    { label: "最佳夏普", name: MODEL_LABEL[bestSharpe && bestSharpe.k] || (bestSharpe && bestSharpe.k), val: fmtNum(bestSharpe && bestSharpe.p.sharpe, 2), sub: `年化 ${fmtPct(bestSharpe && bestSharpe.p.annual_return)}`, color: "#60a5fa" },
+    { label: "最高年化", name: MODEL_LABEL[bestRet && bestRet.k] || (bestRet && bestRet.k), val: fmtPct(bestRet && bestRet.p.annual_return), sub: `Calmar ${fmtNum(bestRet && bestRet.p.calmar)}`, color: "#34d399" },
+    { label: "Top 因子", name: top.factor, val: top.factor ? top.factor : "—", sub: `IC_IR ${fmtNum(top.ir, 3)} · |IC| ${fmtNum(top.abs_ic_mean, 3)}`, color: "#f59e0b" },
+    { label: "最强回撤控制", name: bestSharpe && bestSharpe.k, val: fmtPct(bestSharpe && bestSharpe.p.max_drawdown), sub: `Calmar ${fmtNum(bestSharpe && bestSharpe.p.calmar)}`, color: "#f472b6" },
+  ];
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {cards.map((c, i) => (
+        <div key={i} className="card p-4 relative overflow-hidden">
+          <div className="absolute top-0 left-0 h-1 w-full" style={{ background: c.color }} />
+          <div className="text-xs uppercase tracking-wide text-slate-400">{c.label}</div>
+          <div className="text-2xl font-bold mt-1" style={{ color: c.color }}>{c.val}</div>
+          <div className="text-xs text-slate-500 mt-1">{c.name ? c.name : "—"}{c.sub ? ` · ${c.sub}` : ""}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function IcLeaderboard({ ic }) {
+  const rows = (ic || []).slice().sort((a, b) => Math.abs(b.ir) - Math.abs(a.ir));
+  return (
+    <div className="card overflow-hidden">
+      <div className="text-sm text-slate-300 mb-2 font-medium">因子 IC 排行榜（按 |IC_IR| 排序）</div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-slate-400 bg-ink-700/50">
+            <tr>
+              <th className="text-left px-3 py-2">#</th>
+              <th className="text-left px-3 py-2">因子</th>
+              <th className="text-right px-3 py-2">方法</th>
+              <th className="text-right px-3 py-2">IC均值</th>
+              <th className="text-right px-3 py-2">|IC|</th>
+              <th className="text-right px-3 py-2">IC_IR</th>
+              <th className="text-right px-3 py-2">IC&gt;0占比</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.factor + r.method} className="border-t border-ink-600/40" style={i === 0 ? { background: "rgba(245,158,11,0.08)" } : null}>
+                <td className="px-3 py-1.5 text-slate-500">{i + 1}</td>
+                <td className="px-3 py-1.5 font-medium">{r.factor}</td>
+                <td className="text-right px-3 py-1.5 text-slate-400">{r.method}</td>
+                <td className="text-right px-3 py-1.5 font-mono">{fmtNum(r.ic_mean, 3)}</td>
+                <td className="text-right px-3 py-1.5 font-mono">{fmtNum(r.abs_ic_mean, 3)}</td>
+                <td className="text-right px-3 py-1.5 font-mono" style={{ color: r.ir >= 0 ? "#ef4444" : "#22c55e" }}>{fmtNum(r.ir, 3)}</td>
+                <td className="text-right px-3 py-1.5 font-mono">{fmtPct(r.ic_pos_ratio)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function DecayHeatmap({ decay }) {
+  const factors = Object.keys(decay || {});
+  if (!factors.length) return <Empty text="无衰减数据" />;
+  const maxLag = Math.max(...factors.map((f) => (decay[f] || []).length));
+  const data = [];
+  let vmax = 0, vmin = 0;
+  factors.forEach((f, fi) => {
+    (decay[f] || []).forEach((p) => {
+      const v = Number((p.ic || 0).toFixed(3));
+      data.push([p.lag - 1, fi, v]);
+      if (v > vmax) vmax = v;
+      if (v < vmin) vmin = v;
+    });
+  });
+  const option = {
+    backgroundColor: "transparent",
+    tooltip: { position: "top", backgroundColor: "#0f1623", borderColor: "#2a3650", textStyle: { color: "#e5edf7" } },
+    grid: { left: 80, right: 20, top: 20, bottom: 60 },
+    xAxis: { type: "category", data: Array.from({ length: maxLag }, (_, i) => i + 1), name: "滞后(日)", axisLabel: { color: "#9fb3cc" }, axisLine: { lineStyle: { color: "#2a3650" } } },
+    yAxis: { type: "category", data: factors, axisLabel: { color: "#9fb3cc" }, axisLine: { lineStyle: { color: "#2a3650" } } },
+    visualMap: { min: vmin === 0 ? -0.01 : vmin, max: vmax === 0 ? 0.01 : vmax, calculable: true, orient: "horizontal", left: "center", bottom: 8, inRange: { color: ["#22c55e", "#0f1623", "#ef4444"] }, textStyle: { color: "#9fb3cc" } },
+    series: [{ type: "heatmap", data, label: { show: false }, emphasis: { itemStyle: { borderColor: "#fff", borderWidth: 1 } } }],
+  };
+  return <EChart option={option} height={Math.max(260, factors.length * 34)} />;
+}
+
 /* ---------- 主应用 ---------- */
 function App() {
   const [results, setResults] = useState(null);
@@ -401,6 +497,7 @@ function App() {
 
         {tab === "overview" && (
           <div className="space-y-5">
+            <KpiHero results={results} />
             <div className="card p-4">
               <div className="text-sm text-slate-300 mb-2 font-medium">样本外净值曲线（基准=1.0）</div>
               <NavChart results={results} />
@@ -411,6 +508,7 @@ function App() {
 
         {tab === "ic" && (
           <div className="space-y-5">
+            <IcLeaderboard ic={results.ic_summary} />
             <div className="card p-4">
               <div className="text-sm text-slate-300 mb-2 font-medium">因子 IC / RankIC 信息比率（热力图）</div>
               <IcHeatmap ic={results.ic_summary} />
@@ -426,6 +524,10 @@ function App() {
                 </select>
               </div>
               <DecayChart decay={results.factor_decay} factor={factor} />
+            </div>
+            <div className="card p-4">
+              <div className="text-sm text-slate-300 mb-2 font-medium">因子收益衰减热力图（IC × 滞后周期）</div>
+              <DecayHeatmap decay={results.factor_decay} />
             </div>
           </div>
         )}
