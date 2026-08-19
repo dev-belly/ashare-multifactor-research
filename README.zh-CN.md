@@ -103,9 +103,7 @@ flowchart LR
 
 ## 🎬 在线 Demo
 
-> ⚠️ 维护者需在仓库 **Settings → Pages → Source 选 `Deploy from a branch` → 分支 `gh-pages` / 根目录** 启用（分支已推送）。启用后：
->
-> 🔗 **https://dev-belly.github.io/ashare-multifactor-research/**
+🔗 **https://dev-belly.github.io/ashare-multifactor-research/**
 
 在线 Demo 即自动生成的研究报告（免后端）。交互式仪表盘请本地运行（见下）。
 

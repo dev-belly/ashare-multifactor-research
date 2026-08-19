@@ -103,9 +103,7 @@ flowchart LR
 
 ## 🎬 Live Demo
 
-> ⚠️ The maintainer must enable **Settings → Pages → Source: Deploy from a branch → `gh-pages` / root** (already pushed). Once enabled:
->
-> 🔗 **https://dev-belly.github.io/ashare-multifactor-research/**
+🔗 **https://dev-belly.github.io/ashare-multifactor-research/**
 
 The live demo is the auto-generated research report (no backend needed). For the interactive dashboard, run it locally (see below).
 
