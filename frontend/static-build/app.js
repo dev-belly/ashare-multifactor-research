@@ -4,7 +4,9 @@
  * 设计目标：专业量化终端级（玻璃拟态 / 渐变面积图 / 统一暗色主题 / 精修排版）
  * 由 FastAPI 直接托管，无需 npm/vite 构建步骤。所有 API 走同源相对路径 /api/*。
  */
-const { useState, useEffect, useRef, useMemo } = React;
+const { useState, useEffect, useRef, useMemo, useContext } = React;
+
+const ThemeCtx = React.createContext("factorlab");
 
 const MODEL_COLORS = {
   eq_weight: "#38bdf8",
@@ -51,20 +53,22 @@ const TAB_DEFS = [
   { key: "cost", label: "成本与换手" },
 ];
 
-/* ---------- 通用 ECharts 容器（统一 factorlab 主题） ---------- */
+/* ---------- 通用 ECharts 容器（统一 factorlab 主题，随主题切换重初始化） ---------- */
 function EChart({ option, height = 360 }) {
   const ref = useRef(null);
   const inst = useRef(null);
+  const theme = useContext(ThemeCtx);
   useEffect(() => {
     if (!ref.current) return;
-    inst.current = echarts.init(ref.current, "factorlab", { renderer: "canvas" });
+    if (inst.current) inst.current.dispose();
+    inst.current = echarts.init(ref.current, theme, { renderer: "canvas" });
     const onResize = () => inst.current && inst.current.resize();
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("resize", onResize);
-      inst.current && inst.current.dispose();
+      if (inst.current) inst.current.dispose();
     };
-  }, []);
+  }, [theme]);
   useEffect(() => {
     if (inst.current && option) inst.current.setOption(option, true);
   }, [option]);
@@ -494,6 +498,13 @@ function App() {
   const [factor, setFactor] = useState("");
   const [running, setRunning] = useState(false);
   const [runMsg, setRunMsg] = useState("");
+  const [light, setLight] = useState(false);
+  const theme = light ? "factorlab-light" : "factorlab";
+  useEffect(() => {
+    document.documentElement.dataset.theme = light ? "light" : "dark";
+  }, [light]);
+
+  const toggleTheme = () => setLight((l) => !l);
 
   const load = () => {
     fetch("/api/results")
@@ -574,6 +585,7 @@ function App() {
   );
 
   return (
+    <ThemeCtx.Provider value={theme}>
     <div className="min-h-full flex flex-col">
       <header className="sticky top-0 z-20" style={{ background: "rgba(8,13,24,0.72)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(148,163,184,0.1)" }}>
         <div className="px-6 py-3 flex items-center justify-between">
@@ -594,6 +606,9 @@ function App() {
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: C.emerald }} /> 就绪
               </span>
             )}
+            <button onClick={toggleTheme} className="btn-ghost" title="切换深/浅色主题">
+              {light ? "🌙 暗色" : "☀️ 浅色"}
+            </button>
             <button onClick={onRun} disabled={running} className="btn-primary px-3.5 py-1.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
               {running ? "运行中…" : "重新运行流水线"}
             </button>
@@ -716,6 +731,7 @@ function App() {
         {runMsg ? <span className="ml-3 text-cyan">{runMsg}</span> : null}
       </footer>
     </div>
+    </ThemeCtx.Provider>
   );
 }
 
