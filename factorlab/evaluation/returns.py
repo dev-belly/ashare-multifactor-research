@@ -1,13 +1,11 @@
 """收益分析：净值、Sharpe、Calmar、年化、最大回撤。"""
 from __future__ import annotations
 
-from typing import Dict
-
 import numpy as np
 import pandas as pd
 
 
-def perf_stats(nav: pd.Series, rf_annual: float = 0.02, periods_per_year: int = 252) -> Dict[str, float]:
+def perf_stats(nav: pd.Series, rf_annual: float = 0.02, periods_per_year: int = 252) -> dict[str, float]:
     """年化收益 / 波动 / Sharpe / 最大回撤 / Calmar。
 
     Args:

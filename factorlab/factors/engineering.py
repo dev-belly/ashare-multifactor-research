@@ -1,9 +1,6 @@
 """因子工程主入口：注册所有因子 → 拼接面板 → 截面处理 → 输出。"""
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
-
-import numpy as np
 import pandas as pd
 
 from factorlab.factors.base import (
@@ -24,7 +21,7 @@ logger = get_logger(__name__)
 
 
 # ========== 注册表 ==========
-def default_factor_registry() -> Dict[str, Factor]:
+def default_factor_registry() -> dict[str, Factor]:
     """默认 5 类 13 因子。"""
     return {
         # Value
@@ -53,15 +50,15 @@ def default_factor_registry() -> Dict[str, Factor]:
 
 # ========== 拼装流水线 ==========
 def build_factor_panel(
-    quotes: Dict[str, pd.DataFrame],
+    quotes: dict[str, pd.DataFrame],
     financials: pd.DataFrame | None = None,
     industry_map: pd.DataFrame | None = None,
-    registry: Dict[str, Factor] | None = None,
+    registry: dict[str, Factor] | None = None,
     lag_days: int = 90,
     winsorize_q: float = 0.01,
     standardize: str = "zscore",
     do_industry_neutral: bool = True,
-    st_codes: List[str] | None = None,
+    st_codes: list[str] | None = None,
 ) -> pd.DataFrame:
     """构造因子面板。
 
@@ -96,7 +93,7 @@ def build_factor_panel(
         )
 
     # 2) 跑每个因子
-    panels: Dict[str, pd.DataFrame] = {}
+    panels: dict[str, pd.DataFrame] = {}
     for fname, f in registry.items():
         try:
             df = f.compute(quotes, financials, industry_map)
@@ -111,7 +108,7 @@ def build_factor_panel(
 
     # 3) 拼接
     base = panels[list(panels.keys())[0]].copy()
-    for k, p in list(panels.items())[1:]:
+    for p in list(panels.values())[1:]:
         base = base.join(p, how="outer")
 
     # 4) 行业标签

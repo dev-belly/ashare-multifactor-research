@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white" alt="Python">
   <a href="https://github.com/dev-belly/ashare-multifactor-research/actions/workflows/ci.yml"><img src="https://github.com/dev-belly/ashare-multifactor-research/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/tests-44%20passed-22c55e" alt="Tests">
   <img src="https://img.shields.io/github/repo-size/dev-belly/ashare-multifactor-research" alt="Repo size">
 </p>
 
@@ -137,6 +138,21 @@ uv sync --extra data-akshare
 
 ---
 
+## 🧪 测试与质量门禁
+
+44 个单元测试覆盖量化流水线里"错了也不报错"的关键环节：样本外切分边界（训练窗绝不越过测试窗）、
+IC 与绩效指标的数值正确性、交易成本的对称性、截面标准化与行业中性化、分层组合构造。
+
+```bash
+uv sync                       # 安装 dev 依赖组（pytest + ruff）
+uv run pytest tests           # 44 个测试
+uv run ruff check factorlab tests
+```
+
+每次 push / PR 到 `main`，CI 依次执行 **静态检查 → 单元测试 → 合成数据端到端流水线冒烟 → 前端构建**。
+
+---
+
 ## 🐳 部署
 
 - **本地 / 服务器**：`uv run factorlab serve --port 8000`（前端由 FastAPI 直接托管，无需独立构建）。
@@ -172,6 +188,7 @@ factorlab/            # 核心 Python 包
   pipeline.py         # 端到端编排
   cli.py              # typer 命令行入口
 frontend/static-build/# 免构建 CDN SPA（index.html + app.js）
+tests/                # 44 个单元测试（OOS 切分 / 指标 / 成本 / 因子 / 组合）
 config/config.yaml    # 类型化配置
 docs/                 # MkDocs 文档（方法论 / 数据字典 / 快速开始）
 Dockerfile / docker-compose.yml / mkdocs.yml

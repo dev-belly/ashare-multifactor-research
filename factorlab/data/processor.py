@@ -1,8 +1,6 @@
 """数据清洗：复权对齐、停牌标记、缺失值填补、基础衍生字段。"""
 from __future__ import annotations
 
-from typing import Dict, List
-
 import numpy as np
 import pandas as pd
 
@@ -11,7 +9,7 @@ from factorlab.utils.common import get_logger
 logger = get_logger(__name__)
 
 
-def basic_clean(quotes: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+def basic_clean(quotes: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     """基础清洗：去空、排序、衍生 pct_change / 涨跌停标记位。
 
     Args:
@@ -20,7 +18,7 @@ def basic_clean(quotes: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
     Returns:
         清洗后的 quotes（同结构，外加字段）。
     """
-    cleaned: Dict[str, pd.DataFrame] = {}
+    cleaned: dict[str, pd.DataFrame] = {}
     for code, df in quotes.items():
         if df is None or df.empty:
             continue
@@ -44,12 +42,12 @@ def basic_clean(quotes: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
 
 
 def align_to_calendar(
-    quotes: Dict[str, pd.DataFrame],
+    quotes: dict[str, pd.DataFrame],
     calendar: pd.DatetimeIndex,
     suspend_value: str = "ffill",
-) -> Dict[str, pd.DataFrame]:
+) -> dict[str, pd.DataFrame]:
     """统一对齐到交易日历，停牌日用 ffill 复权收盘价。"""
-    out: Dict[str, pd.DataFrame] = {}
+    out: dict[str, pd.DataFrame] = {}
     for code, df in quotes.items():
         d = df.copy()
         if not isinstance(d.index, pd.DatetimeIndex):
@@ -67,7 +65,7 @@ def align_to_calendar(
 
 
 def build_universe_table(
-    quotes: Dict[str, pd.DataFrame],
+    quotes: dict[str, pd.DataFrame],
     financials: pd.DataFrame | None = None,
     industry_map: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
@@ -112,10 +110,10 @@ def merge_financial_quarterly(
 
 
 def forward_returns(
-    quotes: Dict[str, pd.DataFrame], horizon: int = 21
-) -> Dict[str, pd.Series]:
+    quotes: dict[str, pd.DataFrame], horizon: int = 21
+) -> dict[str, pd.Series]:
     """对未来 horizon 天的累计收益（T+1 至 T+1+horizon）。"""
-    out: Dict[str, pd.Series] = {}
+    out: dict[str, pd.Series] = {}
     for code, df in quotes.items():
         c = df["close"]
         # 未来 horizon 日收益从 T+1 开始

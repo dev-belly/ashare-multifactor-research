@@ -1,8 +1,6 @@
 """IC / RankIC 计算与统计。"""
 from __future__ import annotations
 
-from typing import List
-
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
@@ -77,7 +75,7 @@ def ic_summary(ic: pd.Series) -> dict:
 
 
 def multi_factor_ic_table(
-    factor_panel: pd.DataFrame, factor_cols: List[str], methods: List[str] = ("pearson", "spearman")
+    factor_panel: pd.DataFrame, factor_cols: list[str], methods: list[str] = ("pearson", "spearman")
 ) -> pd.DataFrame:
     """输出多因子 × 多方法 IC 摘要表。"""
     rows = []

@@ -1,7 +1,7 @@
 """交易日历：统一 A 股交易日基准。"""
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import pandas as pd
 

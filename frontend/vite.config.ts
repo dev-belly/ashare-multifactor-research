@@ -18,5 +18,15 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: false,
+    // ECharts 体积较大，单独拆包避免主 chunk 超过 1MB
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          echarts: ["echarts", "echarts-for-react"],
+          react: ["react", "react-dom"],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 800,
   },
 });

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -17,9 +16,7 @@ from factorlab.backtest.oos_split import expanding_window_splits, filter_panel_b
 from factorlab.data.akshare_loader import AkShareLoader
 from factorlab.data.processor import align_to_calendar, basic_clean
 from factorlab.evaluation.ic import (
-    calc_ic_series,
     factor_return_decay,
-    ic_summary,
     multi_factor_ic_table,
 )
 from factorlab.evaluation.returns import perf_stats
@@ -31,19 +28,19 @@ from factorlab.models.deep import DeepFactorModel, optimize_deep_hyperparams
 from factorlab.models.elastic_net import ElasticNetModel
 from factorlab.models.lightgbm_model import LightGBMModel
 from factorlab.models.sort_portfolio import SortPortfolio
-from factorlab.utils.common import ensure_dir, get_logger, load_config, PROJECT_ROOT
+from factorlab.utils.common import ensure_dir, get_logger, load_config
 
 logger = get_logger("pipeline")
 
 
 # ========== 通用序列化 ==========
-def _series_to_json(s: pd.Series) -> Dict[str, list]:
+def _series_to_json(s: pd.Series) -> dict[str, list]:
     s = s.dropna()
     dates = [d.strftime("%Y-%m-%d") for d in s.index]
     return {"dates": dates, "values": [round(float(v), 6) for v in s.values]}
 
 
-def _cols(panel: pd.DataFrame) -> List[str]:
+def _cols(panel: pd.DataFrame) -> list[str]:
     return [c for c in panel.columns if c not in {"industry", "is_suspended"}]
 
 
@@ -97,7 +94,7 @@ def run_oos_scores(
     hpo_trials: int = 0,
 ) -> pd.Series:
     factor_cols = _cols(panel)
-    scores: List[pd.Series] = []
+    scores: list[pd.Series] = []
     deep_params = None
 
     for fold in folds:
@@ -161,13 +158,13 @@ def run_oos_scores(
 
 # ========== 主入口 ==========
 def run_pipeline(
-    config_path: Optional[str] = None,
+    config_path: str | None = None,
     models: str = "eq_weight,elastic_net,lightgbm,deep",
     top_k: int = 20,
     rebal_freq: int = 21,
     cost_bps: float = 20.0,
-    data_source: Optional[str] = None,
-    hpo_trials: Optional[int] = None,
+    data_source: str | None = None,
+    hpo_trials: int | None = None,
 ) -> Path:
     cfg = load_config(config_path)
     if data_source:
@@ -225,7 +222,7 @@ def run_pipeline(
     logger.info("OOS 折数：%d", len(folds))
 
     # 5) 模型分数 + 回测
-    final_scores: Dict[str, pd.Series] = {}
+    final_scores: dict[str, pd.Series] = {}
     for m in model_list:
         s = run_oos_scores(panel, ret_21d, folds, m, cfg, hpo_trials=hpo_trials)
         if s.empty:
@@ -233,7 +230,7 @@ def run_pipeline(
             continue
         final_scores[m] = s.dropna()
 
-    bt_results: Dict[str, dict] = {}
+    bt_results: dict[str, dict] = {}
     cost_scenarios = {float(c): {} for c in cfg["evaluation"]["cost_scenarios_bps"]}
     for m, score in final_scores.items():
         score_panel = score.to_frame("score")
@@ -259,7 +256,7 @@ def run_pipeline(
     # 7) 分组组合（取 Top 因子）
     top_factors = _top_factors_by_ir(ic_table, k=6)
     sp = SortPortfolio(n_groups=cfg["evaluation"]["deciles"], weighting="equal")
-    group_data: Dict[str, dict] = {}
+    group_data: dict[str, dict] = {}
     for f in top_factors:
         try:
             gr = sp.backtest(full, ret_panel, factor_col=f)
@@ -276,7 +273,7 @@ def run_pipeline(
             logger.warning("分组 %s 失败: %s", f, e)
 
     # 8) 因子衰减（Top 因子）
-    decay_data: Dict[str, list] = {}
+    decay_data: dict[str, list] = {}
     for f in top_factors:
         try:
             decay_data[f] = factor_return_decay(full, f, max_lag=20).to_dict(orient="records")
@@ -286,7 +283,7 @@ def run_pipeline(
     # 9) 稳健性（市场阶段）—— 以等权基准构建 regime
     bench_nav = _benchmark_nav(quotes)
     regime = market_regime_label(bench_nav, bull_threshold=cfg["evaluation"]["regime"]["bull_threshold"])
-    robustness: Dict[str, dict] = {}
+    robustness: dict[str, dict] = {}
     for m, res in bt_results.items():
         nav = pd.Series(res["nav"]["values"], index=pd.to_datetime(res["nav"]["dates"]))
         rb = robustness_by_regime(nav, regime)
@@ -294,7 +291,7 @@ def run_pipeline(
             robustness[m] = {r: rb.loc[r].to_dict() for r in rb.index}
 
     # 10) 特征重要性（LightGBM 若有）
-    feature_importance: Dict[str, list] = {}
+    feature_importance: dict[str, list] = {}
     if "lightgbm" in final_scores and final_scores["lightgbm"] is not None:
         try:
             train_all, _ = filter_panel_by_fold(panel, folds[0])
@@ -343,7 +340,7 @@ def run_pipeline(
 
 
 # ========== 辅助 ==========
-def _top_factors_by_ir(ic_table: pd.DataFrame, k: int = 6) -> List[str]:
+def _top_factors_by_ir(ic_table: pd.DataFrame, k: int = 6) -> list[str]:
     if ic_table.empty or "ir" not in ic_table.columns:
         return []
     sub = ic_table[ic_table["method"] == "spearman"].dropna(subset=["ir"])

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -15,7 +14,7 @@ logger = get_logger(__name__)
 # ========== 截面处理 ==========
 def cross_section_winsorize(
     df: pd.DataFrame,
-    factor_cols: List[str],
+    factor_cols: list[str],
     lower_q: float = 0.01,
     upper_q: float = 0.99,
 ) -> pd.DataFrame:
@@ -33,7 +32,7 @@ def cross_section_winsorize(
 
 def cross_section_standardize(
     df: pd.DataFrame,
-    factor_cols: List[str],
+    factor_cols: list[str],
     method: str = "zscore",
 ) -> pd.DataFrame:
     """截面标准化：zscore（默认，去均值除 std） 或 rank（百分位 0-1）。
@@ -63,7 +62,7 @@ def cross_section_standardize(
 
 def industry_neutralize(
     df: pd.DataFrame,
-    factor_cols: List[str],
+    factor_cols: list[str],
     industry_col: str = "industry",
 ) -> pd.DataFrame:
     """行业内 zscore 中性化：每个行业内单独标准化。
@@ -87,9 +86,9 @@ def industry_neutralize(
 
 def filter_universe(
     df: pd.DataFrame,
-    st_codes: List[str] | None = None,
+    st_codes: list[str] | None = None,
     suspended_col: str = "is_suspended",
-    factor_cols: List[str] | None = None,
+    factor_cols: list[str] | None = None,
 ) -> pd.DataFrame:
     """过滤 ST 与停牌样本。
 
@@ -120,14 +119,14 @@ class Factor(ABC):
     @abstractmethod
     def compute(
         self,
-        quotes: Dict[str, pd.DataFrame],
+        quotes: dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
         """返回长格式 DataFrame：index=(date,code), columns=[<name>]。"""
 
     @staticmethod
-    def to_long(series_map: Dict[str, pd.Series], name: str) -> pd.DataFrame:
+    def to_long(series_map: dict[str, pd.Series], name: str) -> pd.DataFrame:
         """把 {code: Series} 拼成长格式 (date, code, name)。
 
         Robust: 即便只有 1 只股票，也能正确产出 MultiIndex。

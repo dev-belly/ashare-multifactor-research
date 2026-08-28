@@ -120,7 +120,7 @@ function IcHeatmap({ ic }: { ic: IcRow[] }) {
   return <ReactECharts option={option} style={{ height: 460 }} notMerge />;
 }
 
-function DecayChart({ decay }: { decay: Record<string, any[]>; factor: string }) {
+function DecayChart({ decay, factor }: { decay: Record<string, any[]>; factor: string }) {
   const rows = decay[factor] || [];
   const option: any = {
     backgroundColor: "transparent",
@@ -139,7 +139,7 @@ function DecayChart({ decay }: { decay: Record<string, any[]>; factor: string })
 
 function GroupChart({ group }: { group: any }) {
   const keys = Object.keys(group.groups || {});
-  const series = keys.map((k) => ({
+  const series: any[] = keys.map((k) => ({
     name: k,
     type: "line",
     showSymbol: false,

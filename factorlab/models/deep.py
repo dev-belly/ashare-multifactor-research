@@ -9,8 +9,6 @@
 from __future__ import annotations
 
 import os
-import random
-from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -35,10 +33,10 @@ else:
 class _MLP(nn.Module):
     """简单的多层感知机回归器（含 BatchNorm + Dropout）。"""
 
-    def __init__(self, input_dim: int, hidden_dims: List[int], dropout: float):
+    def __init__(self, input_dim: int, hidden_dims: list[int], dropout: float):
         super().__init__()
         dims = [input_dim] + list(hidden_dims) + [1]
-        layers: List[nn.Module] = []
+        layers: list[nn.Module] = []
         for i in range(len(dims) - 1):
             layers.append(nn.Linear(dims[i], dims[i + 1]))
             if i < len(dims) - 2:
@@ -59,7 +57,7 @@ class DeepFactorModel:
 
     def __init__(
         self,
-        hidden_dims: List[int] = (64, 32),
+        hidden_dims: list[int] = (64, 32),
         dropout: float = 0.2,
         lr: float = 1e-3,
         weight_decay: float = 1e-4,
@@ -67,7 +65,7 @@ class DeepFactorModel:
         batch_size: int = 512,
         patience: int = 10,
         seed: int = 42,
-        input_dim: Optional[int] = None,
+        input_dim: int | None = None,
     ):
         self.hidden_dims = list(hidden_dims)
         self.dropout = dropout
@@ -78,8 +76,8 @@ class DeepFactorModel:
         self.patience = patience
         self.seed = seed
         self.input_dim = input_dim
-        self.feature_names_: List[str] = []
-        self._net: Optional[_MLP] = None
+        self.feature_names_: list[str] = []
+        self._net: _MLP | None = None
         self._y_mean = 0.0
         self._y_std = 1.0
 
@@ -89,7 +87,7 @@ class DeepFactorModel:
         arr = df.fillna(0.0).to_numpy(dtype=np.float32)
         return torch.tensor(arr, device=DEVICE)
 
-    def fit(self, X: pd.DataFrame, y: pd.Series, min_obs: int = 200) -> "DeepFactorModel":
+    def fit(self, X: pd.DataFrame, y: pd.Series, min_obs: int = 200) -> DeepFactorModel:
         df = X.join(y.rename("y"), how="inner").dropna()
         if len(df) < min_obs:
             logger.warning("DeepFactor 训练样本不足（%d < %d），跳过", len(df), min_obs)
@@ -121,7 +119,9 @@ class DeepFactorModel:
         best_state = None
         patience_cnt = 0
         n_batch = max(1, self.batch_size)
+        last_epoch = -1
         for epoch in range(self.epochs):
+            last_epoch = epoch
             self._net.train()
             perm = torch.randperm(len(Xtr), generator=rng).to(DEVICE)
             for i in range(0, len(Xtr), n_batch):
@@ -148,7 +148,7 @@ class DeepFactorModel:
                     break
         if best_state is not None:
             self._net.load_state_dict(best_state)
-        logger.info("DeepFactor 训练完成：epoch=%d best_val_loss=%.6f", epoch + 1, best_loss)
+        logger.info("DeepFactor 训练完成：epoch=%d best_val_loss=%.6f", last_epoch + 1, best_loss)
         return self
 
     def predict(self, X: pd.DataFrame) -> pd.Series:
@@ -170,18 +170,15 @@ def optimize_deep_hyperparams(
     y_val: pd.Series,
     n_trials: int = 12,
     seed: int = 42,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Optuna 超参搜索：返回最优超参 dict。
 
     目标为验证集 RankIC（越高越好），使用 Spearman 相关近似。
     """
+    import optuna
     from scipy.stats import spearmanr
 
-    import optuna
-
-    feat_cols = list(X_train.columns)
-
-    def objective(trial: "optuna.trial.Trial") -> float:
+    def objective(trial: optuna.trial.Trial) -> float:
         hidden = [
             trial.suggest_int("h1", 16, 128, step=16),
             trial.suggest_int("h2", 8, 64, step=8),

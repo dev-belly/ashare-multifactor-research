@@ -1,7 +1,7 @@
 """稳健性分析：按市值 / 行业 / 市场阶段（牛/熊）分层。"""
 from __future__ import annotations
 
-from typing import Dict, List
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
@@ -9,13 +9,14 @@ import pandas as pd
 from factorlab.evaluation.returns import perf_stats
 
 
-def assign_cap_bucket(market_cap: pd.Series, q: List[float] = [0.5, 0.9]) -> pd.Series:
+def assign_cap_bucket(market_cap: pd.Series, q: Sequence[float] = (0.5, 0.9)) -> pd.Series:
     """根据市值分桶。
 
     Args:
         market_cap: 截面市值序列。
-        q: 分位阈值。默认 [0.5, 0.9] → 小 / 中 / 大。
+        q: 分位阈值。默认 (0.5, 0.9) → 小 / 中 / 大。
     """
+    q = list(q)
     cap_bucket = pd.Series("unknown", index=market_cap.index)
     qs = market_cap.quantile(q)
     if isinstance(qs, pd.Series):
@@ -27,7 +28,7 @@ def assign_cap_bucket(market_cap: pd.Series, q: List[float] = [0.5, 0.9]) -> pd.
 
 
 def group_perf_by(
-    nav_by_group: Dict[str, pd.Series],
+    nav_by_group: dict[str, pd.Series],
 ) -> pd.DataFrame:
     """计算各组收益指标。
 
@@ -80,7 +81,7 @@ def robustness_by_cap(
 
 
 def robustness_by_industry(
-    nav_by_industry: Dict[str, pd.Series],
+    nav_by_industry: dict[str, pd.Series],
 ) -> pd.DataFrame:
     """按行业的子组合 NAV 字典 → 表现统计。"""
     return group_perf_by(nav_by_industry)

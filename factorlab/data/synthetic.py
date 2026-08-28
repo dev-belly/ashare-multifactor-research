@@ -5,8 +5,6 @@
 """
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
-
 import numpy as np
 import pandas as pd
 
@@ -16,7 +14,7 @@ logger = get_logger(__name__)
 
 
 # ========== 股票池（覆盖大中微盘与多行业） ==========
-SYNTHETIC_UNIVERSE: List[Dict] = [
+SYNTHETIC_UNIVERSE: list[dict] = [
     # 主板大蓝筹
     {"code": "600519.SH", "name": "贵州茅台", "industry": "食品饮料", "cap_bucket": "large"},
     {"code": "601318.SH", "name": "中国平安", "industry": "非银金融", "cap_bucket": "large"},
@@ -71,7 +69,7 @@ def generate_synthetic_quotes(
     universe: pd.DataFrame,
     calendar: pd.DatetimeIndex,
     seed: int = 42,
-) -> Dict[str, pd.DataFrame]:
+) -> dict[str, pd.DataFrame]:
     """生成日行情：open/high/low/close/volume/amount。
 
     使用几何布朗运动 + 行业/市值风格因子。
@@ -83,7 +81,7 @@ def generate_synthetic_quotes(
     }
     cap_sigma = {"large": 0.014, "mid": 0.018, "small": 0.024}
 
-    out: Dict[str, pd.DataFrame] = {}
+    out: dict[str, pd.DataFrame] = {}
     for _, row in universe.iterrows():
         ind = row["industry"]
         cap = row["cap_bucket"]

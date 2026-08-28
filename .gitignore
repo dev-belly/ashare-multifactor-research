@@ -35,6 +35,9 @@ node_modules/
 frontend/node_modules/
 frontend/dist/
 *.tsbuildinfo
+vite.config.ts.timestamp-*
+.ruff_cache/
+.pytest_cache/
 
 # ===== uv 锁定文件（提交以保证可复现安装） =====
 # uv.lock 已入库

@@ -1,9 +1,6 @@
 """分组组合（Sort Portfolio）：按因子值分组构造等权/加权组合。"""
 from __future__ import annotations
 
-from typing import Dict, List
-
-import numpy as np
 import pandas as pd
 
 from factorlab.utils.common import get_logger

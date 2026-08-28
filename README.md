@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white" alt="Python">
   <a href="https://github.com/dev-belly/ashare-multifactor-research/actions/workflows/ci.yml"><img src="https://github.com/dev-belly/ashare-multifactor-research/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/tests-44%20passed-22c55e" alt="Tests">
   <img src="https://img.shields.io/github/repo-size/dev-belly/ashare-multifactor-research" alt="Repo size">
 </p>
 
@@ -137,6 +138,23 @@ uv sync --extra data-akshare
 
 ---
 
+## 🧪 Testing & Quality Gates
+
+44 unit tests pin down the parts of a quant pipeline that silently break — OOS split boundaries
+(train never overlaps test), IC / performance metric math, cost model symmetry, cross-sectional
+standardization & neutralization, and portfolio construction.
+
+```bash
+uv sync                       # install dev group (pytest + ruff)
+uv run pytest tests           # 44 tests
+uv run ruff check factorlab tests
+```
+
+CI runs **lint → unit tests → end-to-end synthetic pipeline smoke test → frontend build** on every
+push / PR to `main`.
+
+---
+
 ## 🐳 Deployment
 
 - **Local / server:** `uv run factorlab serve --port 8000` (FastAPI serves the frontend — no separate build).
@@ -172,6 +190,7 @@ factorlab/            # core Python package
   pipeline.py         # end-to-end orchestration
   cli.py              # typer entry point
 frontend/static-build/# build-free CDN SPA (index.html + app.js)
+tests/                # 44 unit tests (OOS split, metrics, cost, factors, portfolio)
 config/config.yaml    # typed configuration
 docs/                 # MkDocs (methodology / data dictionary / quickstart)
 Dockerfile / docker-compose.yml / mkdocs.yml

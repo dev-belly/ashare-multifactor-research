@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterator, List, Tuple
 
 import pandas as pd
 
@@ -32,7 +31,7 @@ def expanding_window_splits(
     step_years: int = 1,
     test_years: int = 1,
     step_freq: str = "yearly",
-) -> List[OOSFold]:
+) -> list[OOSFold]:
     """构造 expanding-window 切分。
 
     规则：
@@ -53,18 +52,11 @@ def expanding_window_splits(
     """
     start = pd.Timestamp(start)
     end = pd.Timestamp(end)
-    folds: List[OOSFold] = []
+    folds: list[OOSFold] = []
 
-    if step_freq == "yearly":
-        test_freq = f"{test_years}YE"
-        step_freq_pd = f"{step_years}YE"
-    elif step_freq == "quarterly":
-        test_freq = f"{test_years * 4}QE"
-        step_freq_pd = f"{step_years * 4}QE"
-    elif step_freq == "monthly":
-        test_freq = f"{test_years * 12}ME"
-        step_freq_pd = f"{step_years * 12}ME"
-    else:
+    # 步进频率在 expanding window 下统一由 DateOffset 推进；
+    # 这里只做取值合法性校验，非法取值直接抛错而不是静默回退。
+    if step_freq not in {"yearly", "quarterly", "monthly"}:
         raise ValueError(f"unknown step_freq {step_freq}")
 
     train_end = start + pd.DateOffset(years=train_min_years)
@@ -100,7 +92,7 @@ def filter_panel_by_fold(
     panel: pd.DataFrame,
     fold: OOSFold,
     fin_dates: pd.Series | None = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """按 fold 切分面板。返回 (train_df, test_df)。
 
     关键：财务因子只能用 publish_date + lag 之后的日期。

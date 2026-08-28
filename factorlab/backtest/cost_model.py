@@ -1,9 +1,6 @@
 """交易成本模型：固定基点 + 涨跌停约束 + 停牌约束。"""
 from __future__ import annotations
 
-from typing import Dict
-
-import numpy as np
 import pandas as pd
 
 
@@ -23,7 +20,7 @@ def apply_trading_cost(
 def is_tradable_today(
     code: str,
     today: pd.Timestamp,
-    quotes: Dict[str, pd.DataFrame],
+    quotes: dict[str, pd.DataFrame],
     allow_suspended: bool = False,
 ) -> bool:
     """判断某日某股是否可交易（未停牌/未涨跌停/有成交）。"""

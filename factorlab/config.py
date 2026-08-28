@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -43,26 +43,26 @@ class BacktestSettings(BaseModel):
 
 
 class ModelSettings(BaseModel):
-    cross_section: Dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "method": "ols"})
-    sort_portfolio: Dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "n_groups": 5, "weighting": "equal"})
-    elastic_net: Dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "alpha_grid": [0.001, 0.01, 0.05, 0.1], "l1_ratio_grid": [0.1, 0.3, 0.5, 0.7]})
-    lightgbm: Dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "n_estimators": 200, "learning_rate": 0.05, "num_leaves": 31, "reg_alpha": 0.1, "reg_lambda": 0.1})
-    deep: Dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "hidden_dims": [64, 32], "dropout": 0.2, "lr": 1e-3, "weight_decay": 1e-4, "epochs": 60, "batch_size": 512})
+    cross_section: dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "method": "ols"})
+    sort_portfolio: dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "n_groups": 5, "weighting": "equal"})
+    elastic_net: dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "alpha_grid": [0.001, 0.01, 0.05, 0.1], "l1_ratio_grid": [0.1, 0.3, 0.5, 0.7]})
+    lightgbm: dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "n_estimators": 200, "learning_rate": 0.05, "num_leaves": 31, "reg_alpha": 0.1, "reg_lambda": 0.1})
+    deep: dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "hidden_dims": [64, 32], "dropout": 0.2, "lr": 1e-3, "weight_decay": 1e-4, "epochs": 60, "batch_size": 512})
 
 
 class EvalSettings(BaseModel):
-    ic_methods: List[str] = Field(default_factory=lambda: ["pearson", "spearman"])
+    ic_methods: list[str] = Field(default_factory=lambda: ["pearson", "spearman"])
     deciles: int = 5
-    cost_scenarios_bps: List[float] = Field(default_factory=lambda: [0, 10, 20, 30])
-    robustness: Dict[str, Any] = Field(default_factory=lambda: {"by_cap": True, "by_industry": True, "by_regime": True})
-    regime: Dict[str, Any] = Field(default_factory=lambda: {"bull_threshold": 0.20})
+    cost_scenarios_bps: list[float] = Field(default_factory=lambda: [0, 10, 20, 30])
+    robustness: dict[str, Any] = Field(default_factory=lambda: {"by_cap": True, "by_industry": True, "by_regime": True})
+    regime: dict[str, Any] = Field(default_factory=lambda: {"bull_threshold": 0.20})
 
 
 class OutputSettings(BaseModel):
     log_dir: str = "outputs/logs"
     result_dir: str = "outputs/results"
     figure_dir: str = "outputs/figures"
-    save_format: List[str] = Field(default_factory=lambda: ["parquet", "csv"])
+    save_format: list[str] = Field(default_factory=lambda: ["parquet", "csv"])
 
 
 class VisualizationSettings(BaseModel):
@@ -82,14 +82,14 @@ class Settings(BaseModel):
     random_seed: int = 42
 
     @classmethod
-    def load(cls, path: str | Path | None = None) -> "Settings":
+    def load(cls, path: str | Path | None = None) -> Settings:
         path = Path(path) if path else (PROJECT_ROOT / "config" / "config.yaml")
         path = Path(path)
         if not path.is_absolute():
             path = PROJECT_ROOT / path
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
         return cls(**raw)
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return self.model_dump()

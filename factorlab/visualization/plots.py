@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List
 
 import matplotlib
 
@@ -23,7 +22,7 @@ def setup_style(style: str = "seaborn-v0_8-whitegrid", palette: str = "Set2"):
 
 
 def plot_nav_curve(
-    nav_dict: Dict[str, pd.Series],
+    nav_dict: dict[str, pd.Series],
     title: str = "Strategy NAV",
     out_path: str | Path | None = None,
 ):
@@ -77,7 +76,7 @@ def plot_group_returns(group_ret: pd.DataFrame, title: str = "Group Returns", ou
     return fig
 
 
-def plot_factor_distribution(factor_panel: pd.DataFrame, factor_cols: List[str], out_path=None):
+def plot_factor_distribution(factor_panel: pd.DataFrame, factor_cols: list[str], out_path=None):
     """最新一期截面分布。"""
     if factor_panel.empty:
         return None

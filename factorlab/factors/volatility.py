@@ -1,9 +1,6 @@
 """波动率因子：20/60 日收益标准差、特质波动率。"""
 from __future__ import annotations
 
-from typing import Dict
-
-import numpy as np
 import pandas as pd
 
 from factorlab.factors.base import Factor
@@ -24,11 +21,11 @@ class VolatilityFactor(Factor):
 
     def compute(
         self,
-        quotes: Dict[str, pd.DataFrame],
+        quotes: dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
-        out: Dict[str, pd.Series] = {}
+        out: dict[str, pd.Series] = {}
         for code, df in quotes.items():
             if "close" not in df.columns:
                 continue
@@ -66,7 +63,7 @@ class IdioVolFactor(Factor):
 
     def compute(
         self,
-        quotes: Dict[str, pd.DataFrame],
+        quotes: dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
@@ -80,7 +77,7 @@ class IdioVolFactor(Factor):
         )
         mkt = rets.mean(axis=1)
 
-        out: Dict[str, pd.Series] = {}
+        out: dict[str, pd.Series] = {}
         for code, df in quotes.items():
             r = df.get("ret_1d", df["close"].pct_change())
             df_ = pd.concat([r.rename("r"), mkt.rename("mkt")], axis=1).dropna()

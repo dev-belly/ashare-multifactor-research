@@ -4,8 +4,6 @@
 """
 from __future__ import annotations
 
-from typing import Dict
-
 import numpy as np
 import pandas as pd
 
@@ -47,7 +45,7 @@ class EPFactor(Factor):
 
     def compute(
         self,
-        quotes: Dict[str, pd.DataFrame],
+        quotes: dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
@@ -57,7 +55,7 @@ class EPFactor(Factor):
 
     def _build(
         self,
-        quotes: Dict[str, pd.DataFrame],
+        quotes: dict[str, pd.DataFrame],
         fin: pd.DataFrame,
         np_series: pd.Series,
     ) -> pd.DataFrame:
@@ -66,13 +64,13 @@ class EPFactor(Factor):
         fin["net_profit"] = np_series.values
 
         per_code = []
-        for code, g in fin.groupby("code"):
+        for _, g in fin.groupby("code"):
             g = g.sort_values("period_end")
             g["ttm_np"] = g["net_profit"].rolling(4, min_periods=2).sum()
             per_code.append(g)
         fin_ttm = pd.concat(per_code, axis=0)
 
-        out: Dict[str, pd.Series] = {}
+        out: dict[str, pd.Series] = {}
         for code, qdf in quotes.items():
             sub = fin_ttm[fin_ttm["code"].astype(str) == code].copy()
             if sub.empty:
@@ -97,7 +95,7 @@ class BPFactor(Factor):
 
     def compute(
         self,
-        quotes: Dict[str, pd.DataFrame],
+        quotes: dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
@@ -105,9 +103,9 @@ class BPFactor(Factor):
             return pd.DataFrame()
         return self._build(quotes, financials)
 
-    def _build(self, quotes: Dict[str, pd.DataFrame], fin: pd.DataFrame) -> pd.DataFrame:
+    def _build(self, quotes: dict[str, pd.DataFrame], fin: pd.DataFrame) -> pd.DataFrame:
         fin = fin.copy()
-        out: Dict[str, pd.Series] = {}
+        out: dict[str, pd.Series] = {}
         eq_col = FIELDS["equity"][0] if FIELDS["equity"][0] in fin.columns else None
         sh_col = FIELDS["shares"][0] if FIELDS["shares"][0] in fin.columns else None
         if eq_col is None or sh_col is None:
@@ -134,14 +132,14 @@ class SPFactor(Factor):
 
     def compute(
         self,
-        quotes: Dict[str, pd.DataFrame],
+        quotes: dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
         if financials is None or financials.empty:
             return pd.DataFrame()
         fin = financials.copy()
-        out: Dict[str, pd.Series] = {}
+        out: dict[str, pd.Series] = {}
         rev_col = "revenue"
         if rev_col not in fin.columns:
             return pd.DataFrame()
@@ -171,7 +169,7 @@ class EP2YFactor(Factor):
 
     def compute(
         self,
-        quotes: Dict[str, pd.DataFrame],
+        quotes: dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:

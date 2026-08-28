@@ -2,21 +2,19 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
-
 
 # ========== 路径常量 ==========
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ========== 配置加载 ==========
-def load_config(config_path: str | Path | None = None) -> Dict[str, Any]:
+def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
     """加载 YAML 配置。
 
     Args:
@@ -31,7 +29,7 @@ def load_config(config_path: str | Path | None = None) -> Dict[str, Any]:
     if not config_path.is_absolute():
         config_path = PROJECT_ROOT / config_path
 
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     return cfg
 
@@ -73,7 +71,7 @@ def get_logger(
     logger.addHandler(sh)
 
     # 文件
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     fh = logging.FileHandler(log_dir / f"exp_{ts}.log", encoding="utf-8")
     fh.setFormatter(fmt)
     logger.addHandler(fh)
@@ -95,4 +93,4 @@ def ensure_dir(path: str | Path) -> Path:
 
 def timestamp() -> str:
     """当前 UTC 时间戳字符串。"""
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")

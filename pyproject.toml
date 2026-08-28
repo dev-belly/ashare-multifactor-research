@@ -49,3 +49,25 @@ package = true
 
 [dependency-groups]
 dev = ["pytest>=8.0", "ruff>=0.4", "mkdocs-material>=9.5"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# 只保留有明确收益的规则集，避免 CI 被风格噪音淹没
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # 长行由 formatter 与人工排版决定
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::FutureWarning",
+]

@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List
 
-import numpy as np
 import pandas as pd
 
 from factorlab.backtest.cost_model import apply_trading_cost
@@ -98,7 +96,6 @@ def run_long_only_topk(
             last_rebal_idx = i
         # 当日收益 = 上一日权重 × 当日收益（避免同日内的 look-ahead）
         if i > 0:
-            prev = common_idx[i - 1]
             daily_ret.iloc[i] = (last_weights * ret_w.loc[dt]).sum() - (
                 turnover.iloc[i] * cost_bps * 1e-4 if turnover.iloc[i] > 0 else 0
             )
@@ -120,7 +117,7 @@ def run_long_only_topk(
 
 
 def make_ret_panel(
-    quotes: Dict[str, pd.DataFrame],
+    quotes: dict[str, pd.DataFrame],
     horizon: int = 1,
     use_fwd: bool = False,
 ) -> pd.DataFrame:
@@ -145,8 +142,8 @@ def make_ret_panel(
 def attach_score_to_panel(
     score_panel: pd.DataFrame,
     factor_panel: pd.DataFrame,
-    factor_cols: List[str] | None = None,
-    weights: Dict[str, float] | None = None,
+    factor_cols: list[str] | None = None,
+    weights: dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """把多因子面板聚合成单一 score。
 

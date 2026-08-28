@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import json
 import threading
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
@@ -32,14 +31,14 @@ FRONTEND_DIR = (
 )
 
 _app_lock = threading.Lock()
-_run_state: Dict[str, Any] = {"running": False, "last_run": None}
+_run_state: dict[str, Any] = {"running": False, "last_run": None}
 
 
-def _load_results() -> Dict[str, Any]:
+def _load_results() -> dict[str, Any]:
     if not RESULTS_PATH.exists():
         return {}
     try:
-        with open(RESULTS_PATH, "r", encoding="utf-8") as f:
+        with open(RESULTS_PATH, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {}
@@ -51,35 +50,35 @@ def _startup() -> None:
     app.state.results = _load_results()
 
 
-def _results() -> Dict[str, Any]:
+def _results() -> dict[str, Any]:
     if not hasattr(app.state, "results"):
         app.state.results = _load_results()
     return app.state.results
 
 
 @app.get("/api/health")
-def health() -> Dict[str, Any]:
+def health() -> dict[str, Any]:
     return {"status": "ok", "has_results": bool(_results()), "models": list(_results().get("model_nav", {}).keys())}
 
 
 @app.get("/api/config")
-def get_config() -> Dict[str, Any]:
+def get_config() -> dict[str, Any]:
     return app.state.settings.as_dict()
 
 
 @app.get("/api/meta")
-def get_meta() -> Dict[str, Any]:
+def get_meta() -> dict[str, Any]:
     return _results().get("meta", {})
 
 
 @app.get("/api/results")
-def get_results() -> Dict[str, Any]:
+def get_results() -> dict[str, Any]:
     """返回全部预计算结果（前端一次性拉取）。"""
     return _results()
 
 
 @app.get("/api/models")
-def get_models() -> Dict[str, Any]:
+def get_models() -> dict[str, Any]:
     res = _results()
     out = {}
     for name, m in res.get("model_nav", {}).items():
@@ -88,7 +87,7 @@ def get_models() -> Dict[str, Any]:
 
 
 @app.get("/api/nav/{model}")
-def get_nav(model: str) -> Dict[str, Any]:
+def get_nav(model: str) -> dict[str, Any]:
     m = _results().get("model_nav", {}).get(model)
     if not m:
         raise HTTPException(status_code=404, detail=f"model {model} not found")
@@ -96,36 +95,36 @@ def get_nav(model: str) -> Dict[str, Any]:
 
 
 @app.get("/api/ic")
-def get_ic() -> Dict[str, Any]:
+def get_ic() -> dict[str, Any]:
     return {"ic_summary": _results().get("ic_summary", []), "factor_decay": _results().get("factor_decay", {})}
 
 
 @app.get("/api/groups")
-def get_groups() -> Dict[str, Any]:
+def get_groups() -> dict[str, Any]:
     return {"group_returns": _results().get("group_returns", {})}
 
 
 @app.get("/api/robustness")
-def get_robustness() -> Dict[str, Any]:
+def get_robustness() -> dict[str, Any]:
     return {"robustness": _results().get("robustness", {})}
 
 
 @app.get("/api/feature-importance")
-def get_feature_importance() -> Dict[str, Any]:
+def get_feature_importance() -> dict[str, Any]:
     return {"feature_importance": _results().get("feature_importance", {})}
 
 
 @app.get("/api/cost-scenarios")
-def get_cost_scenarios() -> Dict[str, Any]:
+def get_cost_scenarios() -> dict[str, Any]:
     return {"cost_scenarios": _results().get("cost_scenarios", {})}
 
 
 @app.get("/api/run/state")
-def run_state() -> Dict[str, Any]:
+def run_state() -> dict[str, Any]:
     return _run_state
 
 
-def _do_run(models: str, top_k: int, rebal_freq: int, cost_bps: float, data_source: Optional[str], hpo: int) -> None:
+def _do_run(models: str, top_k: int, rebal_freq: int, cost_bps: float, data_source: str | None, hpo: int) -> None:
     from factorlab.pipeline import run_pipeline
 
     try:
@@ -150,9 +149,9 @@ def trigger_run(
     top_k: int = 20,
     rebal_freq: int = 21,
     cost_bps: float = 20.0,
-    data_source: Optional[str] = None,
+    data_source: str | None = None,
     hpo: int = 0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     with _app_lock:
         if _run_state["running"]:
             return {"status": "already_running", "state": _run_state}
@@ -163,7 +162,7 @@ def trigger_run(
 
 
 @app.post("/api/reload")
-def reload() -> Dict[str, Any]:
+def reload() -> dict[str, Any]:
     with _app_lock:
         app.state.results = _load_results()
     return {"status": "reloaded", "has_results": bool(app.state.results)}

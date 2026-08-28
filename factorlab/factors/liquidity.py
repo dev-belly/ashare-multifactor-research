@@ -1,8 +1,6 @@
 """流动性因子：换手率、Amihud 非流动性。"""
 from __future__ import annotations
 
-from typing import Dict
-
 import numpy as np
 import pandas as pd
 
@@ -30,11 +28,11 @@ class TurnoverFactor(Factor):
 
     def compute(
         self,
-        quotes: Dict[str, pd.DataFrame],
+        quotes: dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
-        out: Dict[str, pd.Series] = {}
+        out: dict[str, pd.Series] = {}
         for code, df in quotes.items():
             if "volume" not in df.columns:
                 continue
@@ -57,11 +55,11 @@ class AmihudFactor(Factor):
 
     def compute(
         self,
-        quotes: Dict[str, pd.DataFrame],
+        quotes: dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
-        out: Dict[str, pd.Series] = {}
+        out: dict[str, pd.Series] = {}
         for code, df in quotes.items():
             if "close" not in df.columns or "amount" not in df.columns:
                 continue

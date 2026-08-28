@@ -1,8 +1,6 @@
 """横截面回归（Fama-MacBeth 风格）：每期回归得到因子暴露得分。"""
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
-
 import numpy as np
 import pandas as pd
 
@@ -17,15 +15,15 @@ class CrossSectionalRegression:
     def __init__(self, method: str = "ols", add_intercept: bool = True):
         self.method = method
         self.add_intercept = add_intercept
-        self.coefs_: List[pd.Series] = []
-        self.tstats_: List[pd.Series] = []
+        self.coefs_: list[pd.Series] = []
+        self.tstats_: list[pd.Series] = []
 
     def fit(
         self,
         X: pd.DataFrame,  # (date, code) × factors
         y: pd.Series,     # (date, code) → future return
         min_obs: int = 30,
-    ) -> "CrossSectionalRegression":
+    ) -> CrossSectionalRegression:
         """逐期回归。"""
         if not isinstance(X.index, pd.MultiIndex) or not isinstance(y.index, pd.MultiIndex):
             raise ValueError("X / y 必须是 (date, code) MultiIndex")
@@ -33,8 +31,8 @@ class CrossSectionalRegression:
         X = X.loc[common]
         y = y.loc[common]
 
-        coef_records: List[pd.Series] = []
-        t_records: List[pd.Series] = []
+        coef_records: list[pd.Series] = []
+        t_records: list[pd.Series] = []
         for dt, x_block in X.groupby(level="date"):
             y_block = y.xs(dt, level="date")
             df = x_block.join(y_block.rename("y"), how="inner").dropna()
@@ -88,7 +86,7 @@ class CrossSectionalRegression:
         return pd.DataFrame({"mean": mean, "std": std, "t_stat": t})
 
 
-def _ols(X: np.ndarray, y: np.ndarray, add_intercept: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+def _ols(X: np.ndarray, y: np.ndarray, add_intercept: bool = True) -> tuple[np.ndarray, np.ndarray]:
     if add_intercept:
         X = np.hstack([np.ones((X.shape[0], 1)), X])
     # beta = (X'X)^-1 X'y
