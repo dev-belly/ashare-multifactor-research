@@ -1,125 +1,85 @@
-# 数据字典（Data Dictionary）
+# 数据与输出字典
 
-> 字段含义、口径、单位、来源与可得日期。
+## 1. 行情数据
 
----
+每只股票是一张以 `date` 为索引的表：
 
-## 1. 行情数据 (`data/processed/processed.pkl` → `quotes`)
+| 字段 | 类型 | 当前口径 |
+| --- | --- | --- |
+| `open` / `high` / `low` / `close` | float | 合成 OHLC 或 AkShare 前复权行情 |
+| `volume` | float | 成交量 |
+| `amount` | float | 成交额；部分因子允许缺失 |
+| `adj_factor` | float | 当前加载器中的兼容字段 |
+| `ret_1d` | float | `close.pct_change()` 的简单收益，不是对数收益 |
+| `limit_threshold` | float | 当前统一近似为 10% |
+| `is_limit_up` / `is_limit_down` | bool | 基于上述近似阈值的标记 |
+| `is_suspended` | bool | 成交量为 0、价格缺失或日历补齐形成的停牌标记 |
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `date` | index | 交易日（pd.DatetimeIndex） |
-| `code` | str | 股票代码（含交易所后缀，如 `600519.SH`） |
-| `open`/`high`/`low`/`close` | float | 复权后的开/高/低/收（默认前复权） |
-| `volume` | float | 成交量（股） |
-| `amount` | float | 成交额（元） |
-| `adj_factor` | float | 复权因子 |
-| `ret_1d` | float | 当日对数收益（clean 阶段由 `close.pct_change` 计算） |
-| `limit_threshold` | float | 涨跌停阈值（默认 10%） |
-| `is_limit_up`/`is_limit_down` | bool | 涨停/跌停标记 |
-| `is_suspended` | bool | 停牌 / 无成交 / 当日缺失 |
+日历对齐会向前填充 OHLC、把缺失成交量补为 0。当前回测尚未根据涨跌停和停牌标记阻止成交，不能把这些标记误解为完整的成交约束模型。
 
-口径：
-- 价格以**前复权**为准；
-- 停牌日 `close` 用 `ffill` 填充、`volume = 0`；
-- 涨跌停阈值对创业板 / 科创板个股自动切换为 20%（生产环境应对接 AkShare 个股 metadata）。
+## 2. 财务数据
 
----
+| 字段 | 含义 |
+| --- | --- |
+| `code` | 带交易所后缀的股票代码 |
+| `period_end` | 报告期末 |
+| `publish_date` | 披露日 |
+| `available_date` | `publish_date + financial_lag_days`，在因子构建时生成 |
+| `revenue` | 营业收入 |
+| `net_profit` | 归母净利润 |
+| `equity` | 归母权益 |
+| `total_assets` / `total_liab` | 总资产 / 总负债 |
+| `operating_cf` | 经营活动现金流 |
+| `gross_profit` | 毛利 |
+| `shares` | 总股本；按可得日向后对齐 |
 
-## 2. 财务数据 (`financials`)
+合成数据还提供 `eps` 和 `bvps`。AkShare 的这些时点字段尚未完成标准化，所以严格实数模式不会假装拥有完整财务数据。
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `code` | str | 股票代码 |
-| `period_end` | date | 报告期（如 2024-09-30） |
-| `publish_date` | date | 实际披露日 |
-| `available_date` | date | `publish_date + lag_days`（默认 +90d），作为因子"可用日" |
-| `revenue` | float | 营业收入 |
-| `net_profit` | float | 归母净利润 |
-| `equity` | float | 归母股东权益 |
-| `total_assets` | float | 总资产 |
-| `total_liab` | float | 总负债 |
-| `operating_cf` | float | 经营活动现金流 |
-| `gross_profit` | float | 毛利 |
-| `eps` | float | 每股收益 |
-| `bvps` | float | 每股净资产 |
-| `shares` | float | 总股本 |
+## 3. 行业数据
 
----
+| 字段 | 含义 |
+| --- | --- |
+| `code` | 股票代码 |
+| `industry` | 行业名称；缺失时使用 `Unknown` |
 
-## 3. 行业分类 (`industry`)
+行业用于行业内标准化。AkShare 覆盖率会记录在 `meta.data_load.data_components.industry`。
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `code` | str | 股票代码 |
-| `industry` | str | 申万一级行业（合成数据中是预设枚举） |
+## 4. 因子面板
 
----
+索引为 `(date, code)`，元数据列为 `industry` 和 `is_suspended`；其余可用列为因子：
 
-## 4. 因子面板 (`data/factors/factor_panel.parquet`)
+| 类别 | 因子 | 简化口径 |
+| --- | --- | --- |
+| Value | `ep`, `bp`, `sp` | 时点财务值 / 当日市值 |
+| Value | `ep_chg_yoy` | 当前 EP 与约 252 个交易日前 EP 之差 |
+| Quality | `roe`, `roa`, `gp_a`, `accruals` | 盈利能力与应计质量 |
+| Momentum | `mom_1m`, `mom_3m`, `mom_12_10` | 21 日、63 日、跳过最近月的长周期动量 |
+| Volatility | `vol_20d`, `vol_60d`, `idio_vol` | 负向波动与特质波动 |
+| Liquidity | `turn_20d` | 20 日平均 `volume / 最新已披露 shares` |
+| Liquidity | `amihud_20d` | 负的 20 日平均 `abs(return) / amount` |
 
-长格式 (MultiIndex `date×code`)，除 `industry`、`is_suspended` 外每列都是一个因子：
+缩尾、行业内标准化和全截面标准化在每个交易日独立进行。
 
-### Value（4 个）
-| 因子 | 公式 | 备注 |
-|---|---|---|
-| `ep` | TTM 归母净利 / 总市值 | EP（高 = 低估） |
-| `bp` | 归母权益 / 总市值 | BP |
-| `sp` | TTM 营收 / 总市值 | SP |
-| `ep_chg_yoy` | EP_t − EP_{t-252d} | 同比改善 |
+## 5. `results.json`
 
-### Quality（4 个）
-| 因子 | 公式 | 备注 |
-|---|---|---|
-| `roe` | TTM 归母净利 / 归母权益 | 净资产收益率 |
-| `roa` | TTM 归母净利 / 总资产 | 总资产收益率 |
-| `gp_a` | TTM 毛利 / TTM 营收 | 毛利率 |
-| `accruals` | (TTM 净利润 − TTM OCF) / 总资产 | 应计利润（负向，值越小越好） |
-
-### Momentum（3 个）
-| 因子 | 公式 | 备注 |
-|---|---|---|
-| `mom_1m` | `close[t] / close[t-21] - 1` | 1 月动量 |
-| `mom_3m` | `close[t] / close[t-63] - 1` | 3 月动量 |
-| `mom_12_10` | `close[t-21] / close[t-252] - 1` | 经典 12-10 动量 |
-
-### Volatility（3 个）
-| 因子 | 公式 | 备注 |
-|---|---|---|
-| `vol_20d` | −std(returns, 20d) | 20 日收益标准差（负向） |
-| `vol_60d` | −std(returns, 60d) | 60 日 |
-| `idio_vol` | −std(residuals of 60d rolling beta × market) | 特质波动率 |
-
-### Liquidity（2 个）
-| 因子 | 公式 | 备注 |
-|---|---|---|
-| `turn_20d` | mean(volume, 20d) | 换手率代理 |
-| `amihud_20d` | −mean(\|ret\| / amount, 20d) | Amihud 非流动性（负向） |
-
----
-
-## 5. 评估产出 (`outputs/results/`)
+当前流水线实际写出两个用户可见文件：
 
 | 文件 | 内容 |
-|---|---|
-| `factor_ic.csv` | 各因子 IC / RankIC 摘要 |
-| `group_ret_<F>.csv` | 因子 F 的 5 分组日收益 |
-| `group_perf_summary.csv` | 各因子多空组合年化/Sharpe |
-| `nav_<MODEL>.csv` | 模型 OOS 净值 |
-| `model_comparison.csv` | 模型对比 |
-| `model_perf_summary.csv` | 模型年化/Sharpe/回撤 |
-| `robust_regime_<MODEL>.csv` | 模型在不同市场阶段的表现 |
-| `market_regime.csv` | 市场牛/熊/震荡标签 |
+| --- | --- |
+| `outputs/results/results.json` | 结构化研究结果 |
+| `outputs/results/report.html` | 由上述 JSON 生成的浏览器报告 |
 
----
+`results.json` 顶层字段：
 
-## 6. 图表 (`outputs/figures/`)
+| 字段 | 内容 |
+| --- | --- |
+| `meta` | 数据来源、覆盖率、日期、模型、fold、标签与执行参数 |
+| `model_nav` | `benchmark` 与成功模型的净值、绩效和换手 |
+| `cost_scenarios` | 各策略在不同单边 bps 下的绩效 |
+| `ic_summary` | 因子 Pearson/Spearman IC 摘要 |
+| `group_returns` | Top 因子的分组净值与多空统计 |
+| `factor_decay` | 因子不同 lag 的 IC 摘要 |
+| `robustness` | 按市场阶段统计的结果 |
+| `feature_importance` | 可用时的模型特征重要性 |
 
-| 文件 | 内容 |
-|---|---|
-| `ic_<F>.png` | 因子 F 的 IC 序列（柱+累积） |
-| `group_ret_<F>.png` | 分组 NAV |
-| `model_nav.png` | 各模型 OOS NAV 对比 |
-| `drawdown.png` | 最大回撤区间 |
-| `factor_distribution.png` | 最新截面因子直方图 |
-| `turnover_<MODEL>.png` | 调仓日换手 |
+不可表示的非有限浮点数会序列化为 JSON `null`，不会输出非标准 `NaN` 或 `Infinity`。

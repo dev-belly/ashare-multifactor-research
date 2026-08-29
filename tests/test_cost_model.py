@@ -18,8 +18,8 @@ def test_no_trade_has_zero_cost():
 def test_full_turnover_cost_matches_formula():
     old = _w(A=1.0, B=0.0)
     new = _w(A=0.0, B=1.0)
-    # |Δ| 合计 = 2.0；单边 20bps → 2.0 * 20 * 0.5 * 1e-4 = 2e-3
-    assert abs(apply_trading_cost(old, new, cost_bps=20.0) - 2e-3) < 1e-12
+    # |Δ| 合计 = 2.0；卖出与买入各收单边 20bps → 2.0 * 20 * 1e-4 = 4e-3
+    assert abs(apply_trading_cost(old, new, cost_bps=20.0) - 4e-3) < 1e-12
 
 
 def test_cost_scales_linearly_with_bps():

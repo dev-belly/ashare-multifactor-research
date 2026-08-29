@@ -3,7 +3,10 @@
 不依赖外网时用 multivariate geometric Brownian motion + 因子驱动
 合成可复现的"准真实"行情/财务/行业数据，用于流水线自检。
 """
+
 from __future__ import annotations
+
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -14,40 +17,180 @@ logger = get_logger(__name__)
 
 
 # ========== 股票池（覆盖大中微盘与多行业） ==========
-SYNTHETIC_UNIVERSE: list[dict] = [
+SYNTHETIC_UNIVERSE: List[Dict] = [
     # 主板大蓝筹
-    {"code": "600519.SH", "name": "贵州茅台", "industry": "食品饮料", "cap_bucket": "large"},
-    {"code": "601318.SH", "name": "中国平安", "industry": "非银金融", "cap_bucket": "large"},
-    {"code": "600036.SH", "name": "招商银行", "industry": "银行", "cap_bucket": "large"},
-    {"code": "601398.SH", "name": "工商银行", "industry": "银行", "cap_bucket": "large"},
-    {"code": "600276.SH", "name": "恒瑞医药", "industry": "医药生物", "cap_bucket": "large"},
-    {"code": "601166.SH", "name": "兴业银行", "industry": "银行", "cap_bucket": "large"},
-    {"code": "600028.SH", "name": "中国石化", "industry": "石油石化", "cap_bucket": "large"},
-    {"code": "601857.SH", "name": "中国石油", "industry": "石油石化", "cap_bucket": "large"},
-    {"code": "600030.SH", "name": "中信证券", "industry": "非银金融", "cap_bucket": "large"},
-    {"code": "601012.SH", "name": "隆基绿能", "industry": "电力设备", "cap_bucket": "large"},
+    {
+        "code": "600519.SH",
+        "name": "贵州茅台",
+        "industry": "食品饮料",
+        "cap_bucket": "large",
+    },
+    {
+        "code": "601318.SH",
+        "name": "中国平安",
+        "industry": "非银金融",
+        "cap_bucket": "large",
+    },
+    {
+        "code": "600036.SH",
+        "name": "招商银行",
+        "industry": "银行",
+        "cap_bucket": "large",
+    },
+    {
+        "code": "601398.SH",
+        "name": "工商银行",
+        "industry": "银行",
+        "cap_bucket": "large",
+    },
+    {
+        "code": "600276.SH",
+        "name": "恒瑞医药",
+        "industry": "医药生物",
+        "cap_bucket": "large",
+    },
+    {
+        "code": "601166.SH",
+        "name": "兴业银行",
+        "industry": "银行",
+        "cap_bucket": "large",
+    },
+    {
+        "code": "600028.SH",
+        "name": "中国石化",
+        "industry": "石油石化",
+        "cap_bucket": "large",
+    },
+    {
+        "code": "601857.SH",
+        "name": "中国石油",
+        "industry": "石油石化",
+        "cap_bucket": "large",
+    },
+    {
+        "code": "600030.SH",
+        "name": "中信证券",
+        "industry": "非银金融",
+        "cap_bucket": "large",
+    },
+    {
+        "code": "601012.SH",
+        "name": "隆基绿能",
+        "industry": "电力设备",
+        "cap_bucket": "large",
+    },
     # 中盘
-    {"code": "000858.SZ", "name": "五粮液", "industry": "食品饮料", "cap_bucket": "mid"},
-    {"code": "000333.SZ", "name": "美的集团", "industry": "家用电器", "cap_bucket": "mid"},
-    {"code": "000651.SZ", "name": "格力电器", "industry": "家用电器", "cap_bucket": "mid"},
+    {
+        "code": "000858.SZ",
+        "name": "五粮液",
+        "industry": "食品饮料",
+        "cap_bucket": "mid",
+    },
+    {
+        "code": "000333.SZ",
+        "name": "美的集团",
+        "industry": "家用电器",
+        "cap_bucket": "mid",
+    },
+    {
+        "code": "000651.SZ",
+        "name": "格力电器",
+        "industry": "家用电器",
+        "cap_bucket": "mid",
+    },
     {"code": "002594.SZ", "name": "比亚迪", "industry": "汽车", "cap_bucket": "mid"},
     {"code": "002475.SZ", "name": "立讯精密", "industry": "电子", "cap_bucket": "mid"},
-    {"code": "300750.SZ", "name": "宁德时代", "industry": "电力设备", "cap_bucket": "mid"},
-    {"code": "300059.SZ", "name": "东方财富", "industry": "非银金融", "cap_bucket": "mid"},
-    {"code": "002714.SZ", "name": "牧原股份", "industry": "农林牧渔", "cap_bucket": "mid"},
-    {"code": "600887.SH", "name": "伊利股份", "industry": "食品饮料", "cap_bucket": "mid"},
-    {"code": "601888.SH", "name": "中国中免", "industry": "社会服务", "cap_bucket": "mid"},
+    {
+        "code": "300750.SZ",
+        "name": "宁德时代",
+        "industry": "电力设备",
+        "cap_bucket": "mid",
+    },
+    {
+        "code": "300059.SZ",
+        "name": "东方财富",
+        "industry": "非银金融",
+        "cap_bucket": "mid",
+    },
+    {
+        "code": "002714.SZ",
+        "name": "牧原股份",
+        "industry": "农林牧渔",
+        "cap_bucket": "mid",
+    },
+    {
+        "code": "600887.SH",
+        "name": "伊利股份",
+        "industry": "食品饮料",
+        "cap_bucket": "mid",
+    },
+    {
+        "code": "601888.SH",
+        "name": "中国中免",
+        "industry": "社会服务",
+        "cap_bucket": "mid",
+    },
     # 小盘
-    {"code": "002415.SZ", "name": "海康威视", "industry": "电子", "cap_bucket": "small"},
-    {"code": "600196.SH", "name": "复星医药", "industry": "医药生物", "cap_bucket": "small"},
-    {"code": "300015.SZ", "name": "爱尔眼科", "industry": "医药生物", "cap_bucket": "small"},
-    {"code": "002230.SZ", "name": "科大讯飞", "industry": "计算机", "cap_bucket": "small"},
-    {"code": "300760.SZ", "name": "迈瑞医疗", "industry": "医药生物", "cap_bucket": "small"},
-    {"code": "600436.SH", "name": "片仔癀", "industry": "医药生物", "cap_bucket": "small"},
-    {"code": "002466.SZ", "name": "天齐锂业", "industry": "有色金属", "cap_bucket": "small"},
-    {"code": "600438.SH", "name": "通威股份", "industry": "电力设备", "cap_bucket": "small"},
-    {"code": "300122.SZ", "name": "智飞生物", "industry": "医药生物", "cap_bucket": "small"},
-    {"code": "601633.SH", "name": "长城汽车", "industry": "汽车", "cap_bucket": "small"},
+    {
+        "code": "002415.SZ",
+        "name": "海康威视",
+        "industry": "电子",
+        "cap_bucket": "small",
+    },
+    {
+        "code": "600196.SH",
+        "name": "复星医药",
+        "industry": "医药生物",
+        "cap_bucket": "small",
+    },
+    {
+        "code": "300015.SZ",
+        "name": "爱尔眼科",
+        "industry": "医药生物",
+        "cap_bucket": "small",
+    },
+    {
+        "code": "002230.SZ",
+        "name": "科大讯飞",
+        "industry": "计算机",
+        "cap_bucket": "small",
+    },
+    {
+        "code": "300760.SZ",
+        "name": "迈瑞医疗",
+        "industry": "医药生物",
+        "cap_bucket": "small",
+    },
+    {
+        "code": "600436.SH",
+        "name": "片仔癀",
+        "industry": "医药生物",
+        "cap_bucket": "small",
+    },
+    {
+        "code": "002466.SZ",
+        "name": "天齐锂业",
+        "industry": "有色金属",
+        "cap_bucket": "small",
+    },
+    {
+        "code": "600438.SH",
+        "name": "通威股份",
+        "industry": "电力设备",
+        "cap_bucket": "small",
+    },
+    {
+        "code": "300122.SZ",
+        "name": "智飞生物",
+        "industry": "医药生物",
+        "cap_bucket": "small",
+    },
+    {
+        "code": "601633.SH",
+        "name": "长城汽车",
+        "industry": "汽车",
+        "cap_bucket": "small",
+    },
 ]
 
 
@@ -69,7 +212,7 @@ def generate_synthetic_quotes(
     universe: pd.DataFrame,
     calendar: pd.DatetimeIndex,
     seed: int = 42,
-) -> dict[str, pd.DataFrame]:
+) -> Dict[str, pd.DataFrame]:
     """生成日行情：open/high/low/close/volume/amount。
 
     使用几何布朗运动 + 行业/市值风格因子。
@@ -81,7 +224,7 @@ def generate_synthetic_quotes(
     }
     cap_sigma = {"large": 0.014, "mid": 0.018, "small": 0.024}
 
-    out: dict[str, pd.DataFrame] = {}
+    out: Dict[str, pd.DataFrame] = {}
     for _, row in universe.iterrows():
         ind = row["industry"]
         cap = row["cap_bucket"]
@@ -110,8 +253,10 @@ def generate_synthetic_quotes(
         open_ = close * (1 + rng.normal(0, 0.003, n))
         # 量：基础量 * 涨跌缩放
         base_vol = {"large": 8e6, "mid": 4e6, "small": 2e6}[cap]
-        volume = base_vol * (1 + 0.5 * np.abs(log_ret) / sigma) * np.exp(
-            rng.normal(0, 0.2, n)
+        volume = (
+            base_vol
+            * (1 + 0.5 * np.abs(log_ret) / sigma)
+            * np.exp(rng.normal(0, 0.2, n))
         )
         amount = close * volume
 
@@ -161,7 +306,7 @@ def generate_synthetic_financials(
         for q in quarters:
             period_end = q.end_time.date()
             # 财务规模随时间演化
-            t = (q.ordinal - pd.Period("2017Q4", freq="Q").ordinal)
+            t = q.ordinal - pd.Period("2017Q4", freq="Q").ordinal
             size_growth = (1 + growth) ** t
             rev = scale * 1e9 * rng.uniform(0.5, 1.5) * size_growth
             np_ = rev * base_profit_margin * (1 + rng.normal(0, 0.1))

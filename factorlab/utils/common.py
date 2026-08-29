@@ -1,4 +1,5 @@
 """项目级工具：日志、IO、配置加载。"""
+
 from __future__ import annotations
 
 import logging

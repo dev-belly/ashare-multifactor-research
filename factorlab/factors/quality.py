@@ -4,7 +4,10 @@ ROE / ROA 使用 TTM（4 季度滚动）；毛利率 = TTM 毛利 / TTM 营收�
 应计利润 = (Δ流动资产 - 现金) - (Δ流动负债 - 短期借款) - 折旧。
 此处用简化版：Accruals = (NetProfit - OCF) / TotalAssets。
 """
+
 from __future__ import annotations
+
+from typing import Dict
 
 import pandas as pd
 
@@ -25,7 +28,7 @@ class ROEFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
@@ -34,7 +37,7 @@ class ROEFactor(Factor):
         fin = financials.copy()
         if "net_profit" not in fin.columns or "equity" not in fin.columns:
             return pd.DataFrame()
-        out: dict[str, pd.Series] = {}
+        out: Dict[str, pd.Series] = {}
         for code, qdf in quotes.items():
             sub = fin[fin["code"].astype(str) == code].sort_values("period_end")
             if sub.empty or sub["equity"].isna().all():
@@ -55,7 +58,7 @@ class ROAFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
@@ -64,7 +67,7 @@ class ROAFactor(Factor):
         fin = financials.copy()
         if "net_profit" not in fin.columns or "total_assets" not in fin.columns:
             return pd.DataFrame()
-        out: dict[str, pd.Series] = {}
+        out: Dict[str, pd.Series] = {}
         for code, qdf in quotes.items():
             sub = fin[fin["code"].astype(str) == code].sort_values("period_end")
             if sub.empty:
@@ -86,7 +89,7 @@ class GrossMarginFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
@@ -95,7 +98,7 @@ class GrossMarginFactor(Factor):
         fin = financials.copy()
         if not {"gross_profit", "revenue"}.issubset(fin.columns):
             return pd.DataFrame()
-        out: dict[str, pd.Series] = {}
+        out: Dict[str, pd.Series] = {}
         for code, qdf in quotes.items():
             sub = fin[fin["code"].astype(str) == code].sort_values("period_end")
             if sub.empty:
@@ -117,7 +120,7 @@ class AccrualsFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
@@ -126,7 +129,7 @@ class AccrualsFactor(Factor):
         fin = financials.copy()
         if not {"net_profit", "operating_cf", "total_assets"}.issubset(fin.columns):
             return pd.DataFrame()
-        out: dict[str, pd.Series] = {}
+        out: Dict[str, pd.Series] = {}
         for code, qdf in quotes.items():
             sub = fin[fin["code"].astype(str) == code].sort_values("period_end")
             if sub.empty:

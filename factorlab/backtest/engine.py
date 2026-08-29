@@ -1,4 +1,5 @@
 """回测主引擎：接收预测分数 → 构造组合 → 计算收益曲线与统计。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,34 +16,35 @@ logger = get_logger(__name__)
 class BacktestResult:
     """回测结果汇总。"""
 
-    nav: pd.Series                          # 净值曲线（基准 1.0）
-    daily_ret: pd.Series                    # 日收益
-    turnover: pd.Series                     # 换手率
-    positions: pd.DataFrame                 # 持仓（宽表）
-    rebalance_dates: pd.DatetimeIndex       # 调仓日
+    nav: pd.Series  # 净值曲线（基准 1.0）
+    daily_ret: pd.Series  # 日收益
+    turnover: pd.Series  # 实际换仓日的双边总交易权重
+    positions: pd.DataFrame  # 当日收益所使用的持仓（宽表）
+    rebalance_dates: pd.DatetimeIndex  # 目标权重实际生效的日期
     cost_bps: float
     n_stocks_avg: float
 
 
 def run_long_only_topk(
     score_panel: pd.DataFrame,  # MultiIndex (date, code), 单列 score
-    returns_panel: pd.DataFrame,  # MultiIndex (date, code), 单列 fwd_ret_1d 或 ret_1d
+    returns_panel: pd.DataFrame,  # MultiIndex (date, code), 单列实际 ret_1d
     top_k: int = 50,
-    rebalance_freq: int = 21,   # 调仓频率（交易日）
+    rebalance_freq: int = 21,  # 调仓频率（交易日）
     cost_bps: float = 20.0,
     min_holding_days: int = 21,
-    max_weight: float = 0.05,   # 个股权重上限（防过度集中）
+    max_weight: float = 0.05,  # 个股权重上限（防过度集中）
 ) -> BacktestResult:
     """多头 TopK 等权回测。
 
     关键：
-        - 调仓日：选 score 最高的 top_k，等权（受 max_weight 上限）
+        - 信号日：选 score 最高的 top_k，等权（受 max_weight 上限）
+        - 信号生成后的下一交易日收盘执行换仓，随后才让目标权重承担收益
         - 调仓周期间：持仓不变，按个股 daily return 滚动
-        - 调仓日：扣除买卖双边成本
+        - 实际换仓生效日：扣除买卖双边成本
 
     Args:
         score_panel: (date, code) → score 分数（已做截面标准化）。
-        returns_panel: (date, code) → 单日收益（ret_1d，已 shift -1 与未来对齐）。
+        returns_panel: (date, code) → 当日实际单日收益（ret_1d，不能预先向未来 shift）。
         top_k: 持仓数。
         rebalance_freq: 调仓频率（交易日）。
         cost_bps: 单边成本（基点）。
@@ -55,29 +57,82 @@ def run_long_only_topk(
     # 把面板 unstack 成宽表便于按行处理
     score_w = score_panel["score"].unstack("code")
     ret_w = returns_panel["ret_1d"].unstack("code")
-    # 对齐
-    common_idx = score_w.index.intersection(ret_w.index)
-    score_w = score_w.loc[common_idx]
-    ret_w = ret_w.loc[common_idx]
-    # 收益用 ffill 处理（停牌日收益为 0）
+    if score_w.empty or ret_w.empty:
+        raise ValueError("score_panel 和 returns_panel 都必须包含数据")
+    # 回测日历以实际收益面板为准。只按 score 的精确 (date, code) 交集
+    # 截取收益会让“当日没有分数但仍在持仓”的股票收益被错误填成 0。
+    start = max(score_w.index.min(), ret_w.index.min())
+    end = min(score_w.index.max(), ret_w.index.max())
+    common_idx = ret_w.index[
+        (ret_w.index >= start) & (ret_w.index <= end)
+    ].sort_values()
+    if common_idx.empty:
+        raise ValueError("score_panel 与 returns_panel 没有重叠日期")
+    score_w = score_w.reindex(common_idx)
+    ret_w = ret_w.reindex(index=common_idx, columns=score_w.columns)
+    # 停牌或缺失行情按当日收益 0 处理
     ret_w = ret_w.fillna(0.0)
 
-    # 调仓日
-    rebal_dates = common_idx[::rebalance_freq]
-    rebal_set = set(rebal_dates)
+    # 这些日期只生成目标权重；真正换仓在各自的下一交易日收盘执行。
+    signal_dates = common_idx[::rebalance_freq]
+    signal_set = set(signal_dates)
 
     # 持仓表（= 0 / 1/N）
     positions = pd.DataFrame(0.0, index=common_idx, columns=score_w.columns)
     turnover = pd.Series(0.0, index=common_idx)
     daily_ret = pd.Series(0.0, index=common_idx)
-    last_rebal_idx = -min_holding_days  # 强制至少经过一个持有期
-    last_weights = pd.Series(0.0, index=score_w.columns)
-    cost_drag = 0.0
+    active_weights = pd.Series(0.0, index=score_w.columns)
+    pending_weights: pd.Series | None = None
+    last_rebalance_idx: int | None = None
+    executed_indices: list[int] = []
 
     for i, dt in enumerate(common_idx):
-        if dt in rebal_set and i - last_rebal_idx >= min_holding_days:
+        # ret_1d 是“前一收盘 → 今日收盘”的收益。昨日收盘才得到的信号
+        # 不能在今日整段 close-to-close 收益开始前成交，因此今日收益仍由
+        # 昨日收盘时已存在的 active_weights 承担。
+        positions.loc[dt] = active_weights
+        asset_returns = ret_w.loc[dt]
+        gross_return = float((active_weights * asset_returns).sum())
+
+        # 先把旧持仓漂移到今日收盘，再在收盘执行昨日信号。这样换手是
+        # 相对实际成交前权重计算的，也不会误吃 T close → T+1 close 收益。
+        gross_value = 1.0 + gross_return
+        if gross_value <= 0:
+            raise RuntimeError("组合单日总价值非正，无法更新漂移权重")
+        active_weights = active_weights.mul(1.0 + asset_returns).div(gross_value)
+
+        trade_cost = 0.0
+        if pending_weights is not None:
+            turnover.loc[dt] = (pending_weights - active_weights).abs().sum()
+            trade_cost = apply_trading_cost(
+                active_weights,
+                pending_weights,
+                cost_bps=cost_bps,
+            )
+            active_weights = pending_weights
+            pending_weights = None
+            last_rebalance_idx = i
+            executed_indices.append(i)
+        daily_ret.loc[dt] = gross_return - trade_cost
+
+        # 收盘后基于今日 score 生成明日目标权重。末日信号没有可执行的
+        # 下一交易日，不能形成虚假的换手、成本或 rebalance date。
+        effective_idx = i + 1
+        holding_period_satisfied = (
+            last_rebalance_idx is None
+            or effective_idx - last_rebalance_idx >= min_holding_days
+        )
+        if (
+            dt in signal_set
+            and effective_idx < len(common_idx)
+            and holding_period_satisfied
+        ):
             # 选 TopK
             row = score_w.loc[dt].dropna()
+            # 整个截面都没有分数通常意味着模型 fold 缺口或数据缺失，
+            # 不是明确的清仓信号；保持现有持仓直到下一次有效信号。
+            if row.empty:
+                continue
             if len(row) >= top_k:
                 picks = row.nlargest(top_k).index
             else:
@@ -88,18 +143,7 @@ def run_long_only_topk(
             # 若超过 1，截断
             if new_w.sum() > 1:
                 new_w = new_w / new_w.sum()
-            # 成本
-            cost = apply_trading_cost(last_weights, new_w, cost_bps=cost_bps)
-            cost_drag += cost
-            turnover.loc[dt] = (new_w - last_weights).abs().sum()
-            last_weights = new_w
-            last_rebal_idx = i
-        # 当日收益 = 上一日权重 × 当日收益（避免同日内的 look-ahead）
-        if i > 0:
-            daily_ret.iloc[i] = (last_weights * ret_w.loc[dt]).sum() - (
-                turnover.iloc[i] * cost_bps * 1e-4 if turnover.iloc[i] > 0 else 0
-            )
-        positions.loc[dt] = last_weights
+            pending_weights = new_w
 
     # 构造净值
     nav = (1 + daily_ret).cumprod()
@@ -110,7 +154,7 @@ def run_long_only_topk(
         daily_ret=daily_ret,
         turnover=turnover,
         positions=positions,
-        rebalance_dates=rebal_dates,
+        rebalance_dates=common_idx[executed_indices],
         cost_bps=cost_bps,
         n_stocks_avg=float(n_stocks_avg),
     )
@@ -123,14 +167,23 @@ def make_ret_panel(
 ) -> pd.DataFrame:
     """构造收益面板（用于回测）。
 
+    ``use_fwd=True`` 时，日期 T 上的值严格定义为同一只股票从 T 日
+    收盘到其第 T+h 个有效观测日收盘的累计收益：
+    ``close[T+h] / close[T] - 1``。每只股票独立计算，末尾不足 h 个
+    观测的日期保留为 NaN。输出列为兼容现有调用仍命名为 ``ret_1d``。
+
     Args:
         quotes: 日行情。
-        horizon: 未来期数（仅 use_fwd=True 生效）。
-        use_fwd: True → 用未来收益；False → 用当日实际收益（回测已 shift -1）。
+        horizon: 未来收益跨度（有效观测数，仅 use_fwd=True 生效）。
+        use_fwd: True → T 到 T+h 的未来累计收益；False → T 日实际单日收益。
     """
+    if horizon < 1:
+        raise ValueError("horizon 必须是正整数")
+
     rows = {}
     for code, df in quotes.items():
-        r = df["close"].pct_change(periods=horizon) if use_fwd else df["close"].pct_change()
+        close = df["close"]
+        r = close.shift(-horizon).div(close).sub(1.0) if use_fwd else close.pct_change()
         rows[code] = r.rename("ret_1d")
     panel = pd.concat(rows, axis=1)
     panel.columns.name = "code"
@@ -149,7 +202,9 @@ def attach_score_to_panel(
 
     默认等权；weights 提供时按权加和。
     """
-    cols = factor_cols or [c for c in factor_panel.columns if c not in {"industry", "is_suspended"}]
+    cols = factor_cols or [
+        c for c in factor_panel.columns if c not in {"industry", "is_suspended"}
+    ]
     weights = weights or {c: 1.0 for c in cols}
     w = pd.Series(weights).reindex(cols).fillna(0.0)
     s = factor_panel[cols].mul(w, axis=1).sum(axis=1, skipna=True)

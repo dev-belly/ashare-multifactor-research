@@ -4,12 +4,14 @@
 # 数据源选择: akshare | synthetic
 # synthetic 用于本机/沙盒不便访问外网时生成模拟数据，便于流水线自检
 data:
-  source: akshare            # akshare=实盘数据；synthetic=合成数据（兜底）
+  source: synthetic          # 默认只跑可复现演示数据；akshare 见文档的实验模式
   start_date: '2018-01-01'   # 训练期起点
   end_date:   '2025-12-31'   # 测试期终点
   benchmark: '000300.SH'     # 基准：沪深 300
   universe: 'all'            # 'all' | 'hs300' | 'zz500' | 'zz1000'
-  fallback_synthetic: true   # AkShare 失败时是否静默降级到 synthetic
+  max_symbols: 50            # AkShare 显式加载上限；null 表示不限制
+  allow_fallback: false      # 不静默换数据源；true 时会在结果 metadata 记录原因
+  allow_partial_real_data: false  # AkShare 财务字段未标准化前，默认拒绝不完整实数运行
   cache_dir: 'data/raw'
   processed_dir: 'data/processed'
   factor_dir: 'data/factors'
@@ -22,13 +24,12 @@ factors:
   st_filter: true            # 过滤 ST/*ST
   suspended_filter: true     # 过滤停牌
 
-  # 财报可得日期偏移：默认 T+90d 视为财报可用，
-  # 关键！严格防止未来信息泄漏
+  # 财报实际可得日 = publish_date + 90d（保守安全缓冲）
   financial_lag_days: 90
 
 # 样本外回测切分
 backtest:
-  oos_window: 'quarterly'    # quarterly | monthly | yearly
+  oos_window: 'yearly'       # 当前 step_years/test_years 均以年为单位
   train_min_years: 2         # 初始训练窗口（年）
   step_years: 1              # 扩展步长（年）
   test_years: 1              # 测试窗口（年）
@@ -61,7 +62,7 @@ models:
     weight_decay: 0.0001
     epochs: 60
     batch_size: 512
-    hpo_trials: 12           # Optuna 超参搜索 trial 数（0 表示关闭）
+    hpo_trials: 0            # 默认关闭；需要时通过 --hpo N 显式开启
 
 # 评估
 evaluation:

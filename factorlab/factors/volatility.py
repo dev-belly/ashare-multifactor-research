@@ -1,5 +1,8 @@
 """波动率因子：20/60 日收益标准差、特质波动率。"""
+
 from __future__ import annotations
+
+from typing import Dict
 
 import pandas as pd
 
@@ -21,11 +24,11 @@ class VolatilityFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
-        out: dict[str, pd.Series] = {}
+        out: Dict[str, pd.Series] = {}
         for code, df in quotes.items():
             if "close" not in df.columns:
                 continue
@@ -63,7 +66,7 @@ class IdioVolFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
@@ -73,11 +76,15 @@ class IdioVolFactor(Factor):
             return pd.DataFrame()
         # 用"等权平均"作为市场代理
         rets = pd.DataFrame(
-            {c: d.get("ret_1d", d["close"].pct_change()) for c, d in quotes.items() if "close" in d.columns}
+            {
+                c: d.get("ret_1d", d["close"].pct_change())
+                for c, d in quotes.items()
+                if "close" in d.columns
+            }
         )
         mkt = rets.mean(axis=1)
 
-        out: dict[str, pd.Series] = {}
+        out: Dict[str, pd.Series] = {}
         for code, df in quotes.items():
             r = df.get("ret_1d", df["close"].pct_change())
             df_ = pd.concat([r.rename("r"), mkt.rename("mkt")], axis=1).dropna()

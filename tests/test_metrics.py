@@ -96,7 +96,8 @@ def test_turnover_stats_annualization():
     t = pd.Series([0.5, 0.5, 0.5])
     s = turnover_stats(t)
     assert abs(s["avg"] - 0.5) < 1e-9
-    assert abs(s["annualized"] - 0.5 * (252 / 21)) < 1e-9
+    # 输入序列按日记录；年化应使用真实样本长度，而不是假设每 21 日调仓。
+    assert abs(s["annualized"] - 0.5 * 252) < 1e-9
     assert s["n_rebalances"] == 3
 
 

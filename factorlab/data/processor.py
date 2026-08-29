@@ -1,5 +1,8 @@
 """数据清洗：复权对齐、停牌标记、缺失值填补、基础衍生字段。"""
+
 from __future__ import annotations
+
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -9,7 +12,7 @@ from factorlab.utils.common import get_logger
 logger = get_logger(__name__)
 
 
-def basic_clean(quotes: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+def basic_clean(quotes: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
     """基础清洗：去空、排序、衍生 pct_change / 涨跌停标记位。
 
     Args:
@@ -18,7 +21,7 @@ def basic_clean(quotes: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     Returns:
         清洗后的 quotes（同结构，外加字段）。
     """
-    cleaned: dict[str, pd.DataFrame] = {}
+    cleaned: Dict[str, pd.DataFrame] = {}
     for code, df in quotes.items():
         if df is None or df.empty:
             continue
@@ -42,12 +45,12 @@ def basic_clean(quotes: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
 
 
 def align_to_calendar(
-    quotes: dict[str, pd.DataFrame],
+    quotes: Dict[str, pd.DataFrame],
     calendar: pd.DatetimeIndex,
     suspend_value: str = "ffill",
-) -> dict[str, pd.DataFrame]:
+) -> Dict[str, pd.DataFrame]:
     """统一对齐到交易日历，停牌日用 ffill 复权收盘价。"""
-    out: dict[str, pd.DataFrame] = {}
+    out: Dict[str, pd.DataFrame] = {}
     for code, df in quotes.items():
         d = df.copy()
         if not isinstance(d.index, pd.DatetimeIndex):
@@ -65,7 +68,7 @@ def align_to_calendar(
 
 
 def build_universe_table(
-    quotes: dict[str, pd.DataFrame],
+    quotes: Dict[str, pd.DataFrame],
     financials: pd.DataFrame | None = None,
     industry_map: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
@@ -110,14 +113,15 @@ def merge_financial_quarterly(
 
 
 def forward_returns(
-    quotes: dict[str, pd.DataFrame], horizon: int = 21
-) -> dict[str, pd.Series]:
-    """对未来 horizon 天的累计收益（T+1 至 T+1+horizon）。"""
-    out: dict[str, pd.Series] = {}
+    quotes: Dict[str, pd.DataFrame], horizon: int = 21
+) -> Dict[str, pd.Series]:
+    """计算同一股票从 T 收盘到 T+horizon 收盘的未来累计收益。"""
+    if horizon < 1:
+        raise ValueError("horizon 必须是正整数")
+    out: Dict[str, pd.Series] = {}
     for code, df in quotes.items():
         c = df["close"]
-        # 未来 horizon 日收益从 T+1 开始
-        fwd = c.shift(-horizon) / c.shift(-1) - 1
+        fwd = c.shift(-horizon) / c - 1
         fwd.name = f"fwd_ret_{horizon}d"
         out[code] = fwd
     return out

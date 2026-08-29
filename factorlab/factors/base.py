@@ -1,4 +1,5 @@
 """因子基类 + 截面处理工具（缩尾、标准化、行业中性化、停牌过滤）。"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -52,9 +53,7 @@ def cross_section_standardize(
         for col in factor_cols:
             if col not in out.columns:
                 continue
-            out[col] = (
-                out[col].groupby(level="date").rank(pct=True) - 0.5
-            )
+            out[col] = out[col].groupby(level="date").rank(pct=True) - 0.5
     else:
         raise ValueError(f"unknown standardize method: {method}")
     return out
@@ -97,7 +96,9 @@ def filter_universe(
     out = df.copy()
     if factor_cols is None:
         factor_cols = [
-            c for c in out.columns if c not in {suspended_col, "industry", "is_suspended"}
+            c
+            for c in out.columns
+            if c not in {suspended_col, "industry", "is_suspended"}
         ]
     mask = pd.Series(False, index=out.index)
     if suspended_col in out.columns:
@@ -133,7 +134,8 @@ class Factor(ABC):
         """
         if not series_map:
             return pd.DataFrame(
-                {name: []}, index=pd.MultiIndex.from_arrays([[], []], names=["date", "code"])
+                {name: []},
+                index=pd.MultiIndex.from_arrays([[], []], names=["date", "code"]),
             )
 
         # 方案：逐个 Series 转成 (date, code) DataFrame，再 concat

@@ -1,5 +1,8 @@
 """因子工程主入口：注册所有因子 → 拼接面板 → 截面处理 → 输出。"""
+
 from __future__ import annotations
+
+from typing import Dict, List
 
 import pandas as pd
 
@@ -12,7 +15,12 @@ from factorlab.factors.base import (
 )
 from factorlab.factors.liquidity import AmihudFactor, TurnoverFactor
 from factorlab.factors.momentum import Mom1M, Mom3M, Mom12_10
-from factorlab.factors.quality import AccrualsFactor, GrossMarginFactor, ROAFactor, ROEFactor
+from factorlab.factors.quality import (
+    AccrualsFactor,
+    GrossMarginFactor,
+    ROAFactor,
+    ROEFactor,
+)
 from factorlab.factors.value import BPFactor, EP2YFactor, EPFactor, SPFactor
 from factorlab.factors.volatility import IdioVolFactor, Vol20D, Vol60D
 from factorlab.utils.common import get_logger
@@ -21,8 +29,8 @@ logger = get_logger(__name__)
 
 
 # ========== 注册表 ==========
-def default_factor_registry() -> dict[str, Factor]:
-    """默认 5 类 13 因子。"""
+def default_factor_registry() -> Dict[str, Factor]:
+    """默认 5 类 16 因子。"""
     return {
         # Value
         "ep": EPFactor(),
@@ -50,15 +58,15 @@ def default_factor_registry() -> dict[str, Factor]:
 
 # ========== 拼装流水线 ==========
 def build_factor_panel(
-    quotes: dict[str, pd.DataFrame],
+    quotes: Dict[str, pd.DataFrame],
     financials: pd.DataFrame | None = None,
     industry_map: pd.DataFrame | None = None,
-    registry: dict[str, Factor] | None = None,
+    registry: Dict[str, Factor] | None = None,
     lag_days: int = 90,
     winsorize_q: float = 0.01,
     standardize: str = "zscore",
     do_industry_neutral: bool = True,
-    st_codes: list[str] | None = None,
+    st_codes: List[str] | None = None,
 ) -> pd.DataFrame:
     """构造因子面板。
 
@@ -93,7 +101,7 @@ def build_factor_panel(
         )
 
     # 2) 跑每个因子
-    panels: dict[str, pd.DataFrame] = {}
+    panels: Dict[str, pd.DataFrame] = {}
     for fname, f in registry.items():
         try:
             df = f.compute(quotes, financials, industry_map)
@@ -108,13 +116,15 @@ def build_factor_panel(
 
     # 3) 拼接
     base = panels[list(panels.keys())[0]].copy()
-    for p in list(panels.values())[1:]:
+    for k, p in list(panels.items())[1:]:
         base = base.join(p, how="outer")
 
     # 4) 行业标签
     if industry_map is not None and not industry_map.empty:
         # 用 map 加速
-        ind_map = industry_map.drop_duplicates(subset=["code"]).set_index("code")["industry"]
+        ind_map = industry_map.drop_duplicates(subset=["code"]).set_index("code")[
+            "industry"
+        ]
         base = base.reset_index()
         base["industry"] = base["code"].map(ind_map).fillna("Unknown")
         base = base.set_index(["date", "code"])
@@ -144,7 +154,9 @@ def build_factor_panel(
     base = filter_universe(base, st_codes=st_codes, suspended_col="is_suspended")
 
     # 7) 缩尾
-    base = cross_section_winsorize(base, factor_cols, lower_q=winsorize_q, upper_q=1 - winsorize_q)
+    base = cross_section_winsorize(
+        base, factor_cols, lower_q=winsorize_q, upper_q=1 - winsorize_q
+    )
 
     # 8) 行业内 zscore（先行业内标准化可显著降低行业 bias）
     if do_industry_neutral:

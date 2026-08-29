@@ -1,5 +1,8 @@
 """Elastic Net：线性正则化模型（结合 L1/L2）。"""
+
 from __future__ import annotations
+
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -15,19 +18,19 @@ class ElasticNetModel:
 
     def __init__(
         self,
-        alpha_grid: list[float] | None = None,
-        l1_ratio_grid: list[float] | None = None,
+        alpha_grid: List[float] | None = None,
+        l1_ratio_grid: List[float] | None = None,
         max_iter: int = 5000,
     ):
         self.alpha_grid = alpha_grid or [0.001, 0.01, 0.05, 0.1]
         self.l1_ratio_grid = l1_ratio_grid or [0.1, 0.3, 0.5, 0.7]
         self.max_iter = max_iter
         self.model_: ElasticNetCV | None = None
-        self.feature_names_: list[str] = []
+        self.feature_names_: List[str] = []
 
     def fit(
         self, X: pd.DataFrame, y: pd.Series, min_obs: int = 60
-    ) -> ElasticNetModel:
+    ) -> "ElasticNetModel":
         df = X.join(y.rename("y"), how="inner").dropna()
         if len(df) < min_obs:
             logger.warning("样本不足（%d < %d）", len(df), min_obs)

@@ -1,4 +1,5 @@
 """稳健性分析：按市值 / 行业 / 市场阶段（牛/熊）分层。"""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -59,7 +60,9 @@ def market_regime_label(
         - 否则 neutral
     """
     rets = benchmark_nav.pct_change().fillna(0)
-    rolling = (1 + rets).rolling(lookback_months * 21, min_periods=60).apply(np.prod, raw=True) - 1
+    rolling = (1 + rets).rolling(lookback_months * 21, min_periods=60).apply(
+        np.prod, raw=True
+    ) - 1
     label = pd.Series("neutral", index=benchmark_nav.index)
     label[rolling > bull_threshold] = "bull"
     label[rolling < -bull_threshold] = "bear"
@@ -91,16 +94,29 @@ def robustness_by_regime(
     nav: pd.Series,
     regime_label: pd.Series,
 ) -> pd.DataFrame:
-    """按市场阶段（Bear / Neutral / Bull）评估组合表现。"""
+    """按市场阶段（Bear / Neutral / Bull）评估组合表现。
+
+    先从完整净值恢复逐日收益，再按当日 regime 取样并重新复利。不能直接
+    对非连续日期的净值做 ``pct_change``，否则会把跨越其他市场阶段的整段
+    收益错误归到当前阶段。
+    """
     if regime_label.isna().all():
         return pd.DataFrame()
+    daily_returns = nav.pct_change()
     out = []
     for k in ["bull", "neutral", "bear"]:
         mask = regime_label.reindex(nav.index) == k
-        sub = nav.loc[mask]
-        if len(sub) < 30:
+        sub_returns = daily_returns.loc[mask].dropna()
+        if len(sub_returns) < 30:
             continue
-        stats = perf_stats(sub)
+        # 显式补一个初始净值 1，避免遗漏首个被选中的日收益。
+        sub_nav = pd.Series(
+            [1.0, *((1.0 + sub_returns).cumprod().tolist())],
+            dtype=float,
+        )
+        stats = perf_stats(sub_nav)
         stats["regime"] = k
         out.append(stats)
+    if not out:
+        return pd.DataFrame()
     return pd.DataFrame(out).set_index("regime")

@@ -7,10 +7,12 @@
       （同为梯度提升树）。
     - 在 Linux / Docker 或设置环境变量 FACTORLAB_NATIVE_LGB=1 时，使用原生 LightGBM。
 """
+
 from __future__ import annotations
 
 import os
 import platform
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -61,11 +63,9 @@ class LightGBMModel:
         self.use_native = _use_native_lgb()
         self.model_ = None
         self.feature_importance_: pd.DataFrame = pd.DataFrame()
-        self.feature_names_: list[str] = []
+        self.feature_names_: List[str] = []
 
-    def fit(
-        self, X: pd.DataFrame, y: pd.Series, min_obs: int = 60
-    ) -> LightGBMModel:
+    def fit(self, X: pd.DataFrame, y: pd.Series, min_obs: int = 60) -> "LightGBMModel":
         df = X.join(y.rename("y"), how="inner").dropna()
         if len(df) < min_obs:
             logger.warning("LightGBM 训练样本不足（%d < %d）", len(df), min_obs)

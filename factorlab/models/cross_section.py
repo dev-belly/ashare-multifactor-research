@@ -1,5 +1,8 @@
 """横截面回归（Fama-MacBeth 风格）：每期回归得到因子暴露得分。"""
+
 from __future__ import annotations
+
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -15,24 +18,26 @@ class CrossSectionalRegression:
     def __init__(self, method: str = "ols", add_intercept: bool = True):
         self.method = method
         self.add_intercept = add_intercept
-        self.coefs_: list[pd.Series] = []
-        self.tstats_: list[pd.Series] = []
+        self.coefs_: List[pd.Series] = []
+        self.tstats_: List[pd.Series] = []
 
     def fit(
         self,
         X: pd.DataFrame,  # (date, code) × factors
-        y: pd.Series,     # (date, code) → future return
+        y: pd.Series,  # (date, code) → future return
         min_obs: int = 30,
-    ) -> CrossSectionalRegression:
+    ) -> "CrossSectionalRegression":
         """逐期回归。"""
-        if not isinstance(X.index, pd.MultiIndex) or not isinstance(y.index, pd.MultiIndex):
+        if not isinstance(X.index, pd.MultiIndex) or not isinstance(
+            y.index, pd.MultiIndex
+        ):
             raise ValueError("X / y 必须是 (date, code) MultiIndex")
         common = X.index.intersection(y.index)
         X = X.loc[common]
         y = y.loc[common]
 
-        coef_records: list[pd.Series] = []
-        t_records: list[pd.Series] = []
+        coef_records: List[pd.Series] = []
+        t_records: List[pd.Series] = []
         for dt, x_block in X.groupby(level="date"):
             y_block = y.xs(dt, level="date")
             df = x_block.join(y_block.rename("y"), how="inner").dropna()
@@ -49,7 +54,9 @@ class CrossSectionalRegression:
                 logger.debug("fold %s 回归失败: %s", dt, e)
                 continue
             names = (
-                ["intercept"] + list(x_block.columns) if self.add_intercept else list(x_block.columns)
+                ["intercept"] + list(x_block.columns)
+                if self.add_intercept
+                else list(x_block.columns)
             )
             coef_records.append(pd.Series(beta, index=names, name=dt))
             t_records.append(pd.Series(t, index=names, name=dt))
@@ -62,9 +69,7 @@ class CrossSectionalRegression:
         self.tstat_df_ = pd.DataFrame(t_records)
         return self
 
-    def predict_score(
-        self, X: pd.DataFrame, use_avg_coef: bool = True
-    ) -> pd.Series:
+    def predict_score(self, X: pd.DataFrame, use_avg_coef: bool = True) -> pd.Series:
         """用平均系数（or t 值加权）预测新样本的预期收益。"""
         if use_avg_coef and len(self.coef_df_):
             beta = self.coef_df_.mean(axis=0)
@@ -86,7 +91,9 @@ class CrossSectionalRegression:
         return pd.DataFrame({"mean": mean, "std": std, "t_stat": t})
 
 
-def _ols(X: np.ndarray, y: np.ndarray, add_intercept: bool = True) -> tuple[np.ndarray, np.ndarray]:
+def _ols(
+    X: np.ndarray, y: np.ndarray, add_intercept: bool = True
+) -> Tuple[np.ndarray, np.ndarray]:
     if add_intercept:
         X = np.hstack([np.ones((X.shape[0], 1)), X])
     # beta = (X'X)^-1 X'y

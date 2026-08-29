@@ -1,5 +1,7 @@
 """分组组合（Sort Portfolio）：按因子值分组构造等权/加权组合。"""
+
 from __future__ import annotations
+
 
 import pandas as pd
 
@@ -15,14 +17,20 @@ class SortPortfolio:
         self.n_groups = n_groups
         self.weighting = weighting
 
-    def assign(
-        self, factor_panel: pd.DataFrame, factor_col: str
-    ) -> pd.DataFrame:
+    def assign(self, factor_panel: pd.DataFrame, factor_col: str) -> pd.DataFrame:
         """每期按 factor_col 分组（1=最低, N=最高），返回 (date, code) → group 标签。"""
         f = factor_panel[factor_col]
         # 截面分位
         group = f.groupby(level="date").transform(
-            lambda s: pd.qcut(s.rank(method="first"), self.n_groups, labels=False, duplicates="drop") + 1
+            lambda s: (
+                pd.qcut(
+                    s.rank(method="first"),
+                    self.n_groups,
+                    labels=False,
+                    duplicates="drop",
+                )
+                + 1
+            )
         )
         return group.to_frame("group")
 

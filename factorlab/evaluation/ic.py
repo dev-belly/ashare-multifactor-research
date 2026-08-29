@@ -1,5 +1,8 @@
 """IC / RankIC 计算与统计。"""
+
 from __future__ import annotations
+
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -75,7 +78,9 @@ def ic_summary(ic: pd.Series) -> dict:
 
 
 def multi_factor_ic_table(
-    factor_panel: pd.DataFrame, factor_cols: list[str], methods: list[str] = ("pearson", "spearman")
+    factor_panel: pd.DataFrame,
+    factor_cols: List[str],
+    methods: List[str] = ("pearson", "spearman"),
 ) -> pd.DataFrame:
     """输出多因子 × 多方法 IC 摘要表。"""
     rows = []
@@ -89,7 +94,9 @@ def multi_factor_ic_table(
     return pd.DataFrame(rows)
 
 
-def factor_return_decay(factor_panel: pd.DataFrame, factor_col: str, max_lag: int = 60) -> pd.DataFrame:
+def factor_return_decay(
+    factor_panel: pd.DataFrame, factor_col: str, max_lag: int = 60
+) -> pd.DataFrame:
     """因子收益衰减：lag=1..max_lag 各期 IC。"""
     rows = []
     for lag in range(1, max_lag + 1):
@@ -97,12 +104,13 @@ def factor_return_decay(factor_panel: pd.DataFrame, factor_col: str, max_lag: in
         # 未来 lag 日收益（calc_ic_series 需要 ret_1d 列名）
         tmp["ret_1d"] = factor_panel["ret_1d"].groupby(level="code").shift(-lag)
         ic = calc_ic_series(tmp.dropna(), factor_col, method="spearman")
+        summary = ic_summary(ic)
         rows.append(
             {
                 "lag": lag,
-                "ic_mean": ic.mean(),
-                "ir": ic.mean() / (ic.std() + 1e-12),
-                "n_periods": len(ic),
+                "ic_mean": summary["ic_mean"],
+                "ir": summary["ir"],
+                "n_periods": summary["n_periods"],
             }
         )
     return pd.DataFrame(rows)

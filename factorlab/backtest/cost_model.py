@@ -1,4 +1,5 @@
 """交易成本模型：固定基点 + 涨跌停约束 + 停牌约束。"""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -11,10 +12,14 @@ def apply_trading_cost(
 ) -> float:
     """计算单次调仓的成本（单边基点）。
 
-    成本 = |w_new - w_old| @ 0.5 * cost_bps  （买卖各收一次）
+    ``cost_bps`` 是单边费率，而绝对权重变化之和已经同时包含买入和
+    卖出金额。因此成本为 ``sum(abs(w_new - w_old)) * cost_bps``。
+
+    例如，从 100% A 换到 100% B 的绝对权重变化之和为 2，会分别对
+    卖出 A 和买入 B 收取一次单边成本。
     """
     delta = (weights_new - weights_old).abs().sum()
-    return delta * cost_bps * 0.5 * 1e-4  # 转为小数
+    return float(delta * cost_bps * 1e-4)  # 转为小数
 
 
 def is_tradable_today(
@@ -32,6 +37,4 @@ def is_tradable_today(
     row = df.loc[today]
     if not allow_suspended and bool(row.get("is_suspended", False)):
         return False
-    if bool(row.get("is_limit_up", False)):  # 涨停无法买入
-        return False
-    return True
+    return not bool(row.get("is_limit_up", False))  # 涨停无法买入

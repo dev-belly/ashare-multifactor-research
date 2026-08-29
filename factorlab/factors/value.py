@@ -2,7 +2,10 @@
 
 均以"最新可得"季度财务披露（publish_date + lag）后的对应 TTM 计算。
 """
+
 from __future__ import annotations
+
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -37,6 +40,31 @@ def _ttm(per_code: pd.DataFrame, value_col: str, periods: int = 4) -> pd.Series:
     return per_code[value_col].rolling(periods, min_periods=2).sum()
 
 
+def _align_available(
+    per_code: pd.DataFrame,
+    value_col: str,
+    calendar: pd.DatetimeIndex,
+) -> pd.Series:
+    """Point-in-time align a reported field to the trading calendar.
+
+    ``available_date`` is the only timestamp used for alignment.  In
+    particular, this prevents a later share-count disclosure from being used
+    to reconstruct market capitalisation for earlier dates.
+    """
+    if value_col not in per_code.columns or "available_date" not in per_code.columns:
+        return pd.Series(np.nan, index=calendar, dtype=float)
+
+    reported = (
+        per_code.dropna(subset=["available_date"])
+        .sort_values(["available_date", "period_end"])
+        .drop_duplicates(subset=["available_date"], keep="last")
+        .set_index("available_date")[value_col]
+    )
+    if reported.empty:
+        return pd.Series(np.nan, index=calendar, dtype=float)
+    return reported.reindex(calendar, method="ffill")
+
+
 class EPFactor(Factor):
     """EP（盈利收益率）= TTM 归母净利润 / 总市值。"""
 
@@ -45,7 +73,7 @@ class EPFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
@@ -55,7 +83,7 @@ class EPFactor(Factor):
 
     def _build(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         fin: pd.DataFrame,
         np_series: pd.Series,
     ) -> pd.DataFrame:
@@ -64,26 +92,30 @@ class EPFactor(Factor):
         fin["net_profit"] = np_series.values
 
         per_code = []
-        for _, g in fin.groupby("code"):
+        for code, g in fin.groupby("code"):
             g = g.sort_values("period_end")
             g["ttm_np"] = g["net_profit"].rolling(4, min_periods=2).sum()
             per_code.append(g)
         fin_ttm = pd.concat(per_code, axis=0)
 
-        out: dict[str, pd.Series] = {}
+        out: Dict[str, pd.Series] = {}
         for code, qdf in quotes.items():
             sub = fin_ttm[fin_ttm["code"].astype(str) == code].copy()
             if sub.empty:
                 continue
             # 财务发布日期之前不可用：取到最近可用 ttm
             cal = qdf.index
-            mcap = qdf["close"] * _pick(sub, FIELDS["shares"]).iloc[-1]
+            share_col = next(
+                (name for name in FIELDS["shares"] if name in sub.columns), None
+            )
+            if share_col is None:
+                continue
+            shares = _align_available(sub, share_col, cal)
+            mcap = qdf["close"] * shares
             mcap.name = "mcap"
             # 对每个交易日找该日或之前最近披露的 ttm_np
-            sub_idx = sub.set_index("available_date")["ttm_np"].sort_index()
-            aligned = sub_idx.reindex(cal, method="ffill")
-            ep = aligned.values / mcap.values
-            out[code] = pd.Series(ep, index=cal, name=self.name)
+            aligned = _align_available(sub, "ttm_np", cal)
+            out[code] = (aligned / mcap).rename(self.name)
         return self.to_long(out, self.name)
 
 
@@ -95,7 +127,7 @@ class BPFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
@@ -103,9 +135,11 @@ class BPFactor(Factor):
             return pd.DataFrame()
         return self._build(quotes, financials)
 
-    def _build(self, quotes: dict[str, pd.DataFrame], fin: pd.DataFrame) -> pd.DataFrame:
+    def _build(
+        self, quotes: Dict[str, pd.DataFrame], fin: pd.DataFrame
+    ) -> pd.DataFrame:
         fin = fin.copy()
-        out: dict[str, pd.Series] = {}
+        out: Dict[str, pd.Series] = {}
         eq_col = FIELDS["equity"][0] if FIELDS["equity"][0] in fin.columns else None
         sh_col = FIELDS["shares"][0] if FIELDS["shares"][0] in fin.columns else None
         if eq_col is None or sh_col is None:
@@ -116,11 +150,10 @@ class BPFactor(Factor):
             if sub.empty:
                 continue
             cal = qdf.index
-            mcap = qdf["close"] * sub[sh_col].iloc[-1]
-            sub_idx = sub.set_index("available_date")[eq_col].sort_index()
-            aligned = sub_idx.reindex(cal, method="ffill")
-            bp = aligned.values / mcap.values
-            out[code] = pd.Series(bp, index=cal, name=self.name)
+            shares = _align_available(sub, sh_col, cal)
+            mcap = qdf["close"] * shares
+            aligned = _align_available(sub, eq_col, cal)
+            out[code] = (aligned / mcap).rename(self.name)
         return self.to_long(out, self.name)
 
 
@@ -132,14 +165,14 @@ class SPFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
         if financials is None or financials.empty:
             return pd.DataFrame()
         fin = financials.copy()
-        out: dict[str, pd.Series] = {}
+        out: Dict[str, pd.Series] = {}
         rev_col = "revenue"
         if rev_col not in fin.columns:
             return pd.DataFrame()
@@ -147,13 +180,14 @@ class SPFactor(Factor):
             sub = fin[fin["code"].astype(str) == code].sort_values("period_end")
             if sub.empty:
                 continue
+            if "shares" not in sub.columns:
+                continue
             sub["ttm_rev"] = sub[rev_col].rolling(4, min_periods=2).sum()
             cal = qdf.index
-            mcap = qdf["close"] * sub["shares"].iloc[-1]
-            sub_idx = sub.set_index("available_date")["ttm_rev"].sort_index()
-            aligned = sub_idx.reindex(cal, method="ffill")
-            sp = aligned.values / mcap.values
-            out[code] = pd.Series(sp, index=cal, name=self.name)
+            shares = _align_available(sub, "shares", cal)
+            mcap = qdf["close"] * shares
+            aligned = _align_available(sub, "ttm_rev", cal)
+            out[code] = (aligned / mcap).rename(self.name)
         return self.to_long(out, self.name)
 
 
@@ -169,7 +203,7 @@ class EP2YFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:

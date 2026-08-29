@@ -4,12 +4,12 @@ export interface Series {
 }
 
 export interface Perf {
-  annual_return?: number;
-  annual_vol?: number;
-  sharpe?: number;
-  max_drawdown?: number;
-  calmar?: number;
-  total_return?: number;
+  annual_return?: number | null;
+  annual_vol?: number | null;
+  sharpe?: number | null;
+  max_drawdown?: number | null;
+  calmar?: number | null;
+  total_return?: number | null;
   n_periods?: number;
   years?: number;
   model?: string;
@@ -25,6 +25,9 @@ export interface ModelNav {
 export interface Meta {
   generated_at?: string;
   data_source?: string;
+  requested_data_source?: string;
+  actual_data_source?: string;
+  fallback_reason?: string | null;
   start_date?: string;
   end_date?: string;
   universe_size?: number;
@@ -36,6 +39,8 @@ export interface Meta {
   cost_bps?: number;
   cost_scenarios_bps?: number[];
   n_folds?: number;
+  label_horizon_days?: number;
+  execution_lag_days?: number;
   hpo_trials?: number;
   deep_enabled?: boolean;
 }
@@ -44,17 +49,17 @@ export interface IcRow {
   factor: string;
   method: string;
   n_periods: number;
-  ic_mean: number;
-  ic_std: number;
-  ir: number;
-  ic_pos_ratio: number;
-  abs_ic_mean: number;
+  ic_mean: number | null;
+  ic_std: number | null;
+  ir: number | null;
+  ic_pos_ratio: number | null;
+  abs_ic_mean: number | null;
 }
 
 export interface DecayRow {
   lag: number;
-  ic_mean: number;
-  ir: number;
+  ic_mean: number | null;
+  ir: number | null;
   n_periods: number;
 }
 

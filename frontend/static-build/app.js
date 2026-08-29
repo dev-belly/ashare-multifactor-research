@@ -9,6 +9,7 @@ const { useState, useEffect, useRef, useMemo, useContext } = React;
 const ThemeCtx = React.createContext("factorlab");
 
 const MODEL_COLORS = {
+  benchmark: "#94a3b8",
   eq_weight: "#38bdf8",
   elastic_net: "#34d399",
   lightgbm: "#f59e0b",
@@ -375,7 +376,7 @@ function Skeleton() {
 /* ---------- 亮点组件 ---------- */
 function KpiHero({ results }) {
   const nav = results.model_nav || {};
-  const models = Object.keys(nav);
+  const models = Object.keys(nav).filter((k) => k !== "benchmark");
   let bestSharpe = null, bestRet = null;
   models.forEach((k) => {
     const p = nav[k].perf || {};
@@ -384,7 +385,7 @@ function KpiHero({ results }) {
   });
   const ic = (results.ic_summary || []).slice().sort((a, b) => Math.abs(b.ir) - Math.abs(a.ir));
   const top = ic[0] || {};
-  const MODEL_LABEL = { eq_weight: "等权复合", elastic_net: "ElasticNet", lightgbm: "LightGBM", deep: "深度学习" };
+  const MODEL_LABEL = { benchmark: "股票池等权（无成本）", eq_weight: "等权复合", elastic_net: "ElasticNet", lightgbm: "LightGBM", deep: "深度学习" };
   const sparkFor = (k) => {
     const v = (nav[k] && nav[k].nav && nav[k].nav.values) || [];
     const s = v.length > 40 ? v.filter((_, i) => i % Math.ceil(v.length / 40) === 0) : v;
@@ -473,7 +474,7 @@ function DecayHeatmap({ decay }) {
   let vmax = -1e9, vmin = 1e9;
   factors.forEach((f, fi) => {
     (decay[f] || []).forEach((p) => {
-      const v = Number((p.ic || 0).toFixed(3));
+      const v = Number((p.ic_mean || 0).toFixed(3));
       data.push([p.lag - 1, fi, v]);
       if (v > vmax) vmax = v;
       if (v < vmin) vmin = v;
@@ -495,9 +496,8 @@ function App() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState("overview");
-  const [factor, setFactor] = useState("");
-  const [running, setRunning] = useState(false);
-  const [runMsg, setRunMsg] = useState("");
+  const [decayFactor, setDecayFactor] = useState("");
+  const [groupFactor, setGroupFactor] = useState("");
   const [light, setLight] = useState(false);
   const theme = light ? "factorlab-light" : "factorlab";
   useEffect(() => {
@@ -512,51 +512,20 @@ function App() {
       .then((r) => {
         setResults(r);
         setError(null);
-        if (!factor && r.group_returns) setFactor(Object.keys(r.group_returns)[0] || "");
+        setDecayFactor(Object.keys(r.factor_decay || {})[0] || "");
+        setGroupFactor(Object.keys(r.group_returns || {})[0] || "");
       })
       .catch((e) => setError(String(e)));
   };
 
   useEffect(() => {
     load();
-    const t = setInterval(() => {
-      fetch("/api/run/state")
-        .then((r) => r.json())
-        .then((s) => {
-          if (s.running && !running) setRunning(true);
-          if (!s.running && running) {
-            setRunning(false);
-            load();
-          }
-        })
-        .catch(() => {});
-    }, 4000);
-    return () => clearInterval(t);
     // eslint-disable-next-line
   }, []);
 
-  const onRun = () => {
-    setRunning(true);
-    setRunMsg("流水线后台重算中…");
-    const models = results && results.meta && results.meta.models ? results.meta.models.join(",") : "";
-    const hpo = results && results.meta ? results.meta.hpo_trials || 0 : 0;
-    fetch("/api/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ models, hpo }),
-    })
-      .then(() => {})
-      .catch((e) => {
-        setRunMsg("触发失败：" + String(e));
-        setRunning(false);
-      });
-  };
-
   const meta = (results && results.meta) || {};
-  const topFactors = useMemo(() => {
-    if (!results) return [];
-    return Array.from(new Set((results.ic_summary || []).map((r) => r.factor)));
-  }, [results]);
+  const decayFactors = useMemo(() => Object.keys((results && results.factor_decay) || {}), [results]);
+  const groupFactors = useMemo(() => Object.keys((results && results.group_returns) || {}), [results]);
 
   if (error && !results) {
     return (
@@ -597,20 +566,11 @@ function App() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {running ? (
-              <span className="pill" style={{ color: C.cyan, borderColor: "rgba(56,189,248,0.4)" }}>
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: C.cyan }} /> 重算中
-              </span>
-            ) : (
-              <span className="pill" style={{ color: C.emerald, borderColor: "rgba(16,185,129,0.4)" }}>
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: C.emerald }} /> 就绪
-              </span>
-            )}
+            <span className="pill" style={{ color: C.emerald, borderColor: "rgba(16,185,129,0.4)" }}>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: C.emerald }} /> 只读结果
+            </span>
             <button onClick={toggleTheme} className="btn-ghost" title="切换深/浅色主题">
               {light ? "🌙 暗色" : "☀️ 浅色"}
-            </button>
-            <button onClick={onRun} disabled={running} className="btn-primary px-3.5 py-1.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
-              {running ? "运行中…" : "重新运行流水线"}
             </button>
           </div>
         </div>
@@ -631,7 +591,7 @@ function App() {
           <Stat label="样本区间" value={`${meta.start_date || "—"} ~ ${meta.end_date || "—"}`} />
           <Stat label="股票数" value={String(meta.universe_size ?? "—")} sub={`${meta.n_factors} 个因子`} />
           <Stat label="OOS 折数" value={String(meta.n_folds ?? "—")} sub={`持仓 ${meta.top_k} · 调仓 ${meta.rebal_freq}日`} />
-          <Stat label="数据源" value={meta.data_source ?? "—"} sub={meta.deep_enabled ? "含深度学习模型" : ""} />
+          <Stat label="实际数据源" value={meta.actual_data_source ?? meta.data_source ?? "—"} sub={meta.fallback_reason ? "已发生显式降级" : (meta.deep_enabled ? "含深度学习模型" : "")} />
           <Stat label="生成时间" value={(meta.generated_at || "").replace("T", " ").slice(0, 16)} />
         </div>
 
@@ -641,7 +601,7 @@ function App() {
             <div className="glass p-4 fade-up">
               <div className="flex items-center justify-between mb-1">
                 <div className="text-sm font-semibold text-slate-200">样本外净值曲线</div>
-                <div className="text-[11px] text-slate-500">基准 = 1.0 · 扩张窗口 · 隔日换仓</div>
+                <div className="text-[11px] text-slate-500">基准 = 1.0 · 扩张窗口 · 下一交易日收盘执行</div>
               </div>
               <NavChart results={results} />
             </div>
@@ -660,11 +620,11 @@ function App() {
               <div className="text-sm font-semibold text-slate-200 mb-2">因子收益衰减</div>
               <div className="flex items-center gap-3 mb-3">
                 <span className="text-xs text-slate-400">因子：</span>
-                <select value={factor} onChange={(e) => setFactor(e.target.value)} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-cyan/50" style={{ background: "#0e1424" }}>
-                  {topFactors.map((f) => (<option key={f} value={f}>{f}</option>))}
+                <select value={decayFactor} onChange={(e) => setDecayFactor(e.target.value)} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-cyan/50" style={{ background: "#0e1424" }}>
+                  {decayFactors.map((f) => (<option key={f} value={f}>{f}</option>))}
                 </select>
               </div>
-              <DecayChart decay={results.factor_decay} factor={factor} />
+              <DecayChart decay={results.factor_decay} factor={decayFactor} />
             </div>
             <div className="glass p-4 fade-up">
               <div className="text-sm font-semibold text-slate-200 mb-1">因子收益衰减热力图（RankIC × 滞后周期）</div>
@@ -678,16 +638,16 @@ function App() {
             <div className="glass p-4 fade-up">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-semibold text-slate-200">分组净值（G1 最低 → G5 最高，虚线为多空）</div>
-                <select value={factor} onChange={(e) => setFactor(e.target.value)} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-cyan/50" style={{ background: "#0e1424" }}>
-                  {topFactors.map((f) => (<option key={f} value={f}>{f}</option>))}
+                <select value={groupFactor} onChange={(e) => setGroupFactor(e.target.value)} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-cyan/50" style={{ background: "#0e1424" }}>
+                  {groupFactors.map((f) => (<option key={f} value={f}>{f}</option>))}
                 </select>
               </div>
-              <GroupChart group={results.group_returns[factor]} />
-              {results.group_returns[factor] && (
+              <GroupChart group={results.group_returns[groupFactor]} />
+              {results.group_returns[groupFactor] && (
                 <div className="text-xs text-slate-400 mt-3 flex gap-4 flex-wrap">
-                  <span>多空年化 <b className="num text-bull">{fmtPct(results.group_returns[factor].ls_stats.annual_return)}</b></span>
-                  <span>多空 Sharpe <b className="num text-cyan">{fmtNum(results.group_returns[factor].ls_stats.sharpe)}</b></span>
-                  <span>多空最大回撤 <b className="num text-bear">{fmtPct(results.group_returns[factor].ls_stats.max_drawdown)}</b></span>
+                  <span>多空年化 <b className="num text-bull">{fmtPct(results.group_returns[groupFactor].ls_stats.annual_return)}</b></span>
+                  <span>多空 Sharpe <b className="num text-cyan">{fmtNum(results.group_returns[groupFactor].ls_stats.sharpe)}</b></span>
+                  <span>多空最大回撤 <b className="num text-bear">{fmtPct(results.group_returns[groupFactor].ls_stats.max_drawdown)}</b></span>
                 </div>
               )}
             </div>
@@ -709,7 +669,7 @@ function App() {
             <div className="glass p-4 fade-up">
               <div className="text-sm font-semibold text-slate-200 mb-3">换手率统计</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {Object.entries(results.model_nav || {}).map(([m, info]) => (
+                {Object.entries(results.model_nav || {}).filter(([m]) => m !== "benchmark").map(([m, info]) => (
                   <div key={m} className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5 card-hover">
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                       <span className="w-2 h-2 rounded-full" style={{ background: MODEL_COLORS[m] || "#888" }} />{m}
@@ -727,8 +687,7 @@ function App() {
       </main>
 
       <footer className="px-6 py-4 text-[11px] text-slate-500 border-t border-white/5 mt-2">
-        FactorLab · 严格 expanding-window 样本外 · 财报 T+90d 防泄漏 · 仅供研究，非投资建议
-        {runMsg ? <span className="ml-3 text-cyan">{runMsg}</span> : null}
+        FactorLab · expanding-window OOS · 折边界标签净化 · 下一交易日收盘执行 · 仅供研究，非投资建议
       </footer>
     </div>
     </ThemeCtx.Provider>

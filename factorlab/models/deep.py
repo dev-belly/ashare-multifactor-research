@@ -6,9 +6,11 @@
     - 严格在 expanding-window OOS 框架内训练/预测，避免未来函数。
     - 提供 Optuna HPO 入口，可自动搜索网络结构与正则强度。
 """
+
 from __future__ import annotations
 
 import os
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -33,10 +35,10 @@ else:
 class _MLP(nn.Module):
     """简单的多层感知机回归器（含 BatchNorm + Dropout）。"""
 
-    def __init__(self, input_dim: int, hidden_dims: list[int], dropout: float):
+    def __init__(self, input_dim: int, hidden_dims: List[int], dropout: float):
         super().__init__()
         dims = [input_dim] + list(hidden_dims) + [1]
-        layers: list[nn.Module] = []
+        layers: List[nn.Module] = []
         for i in range(len(dims) - 1):
             layers.append(nn.Linear(dims[i], dims[i + 1]))
             if i < len(dims) - 2:
@@ -57,7 +59,7 @@ class DeepFactorModel:
 
     def __init__(
         self,
-        hidden_dims: list[int] = (64, 32),
+        hidden_dims: List[int] = (64, 32),
         dropout: float = 0.2,
         lr: float = 1e-3,
         weight_decay: float = 1e-4,
@@ -65,7 +67,7 @@ class DeepFactorModel:
         batch_size: int = 512,
         patience: int = 10,
         seed: int = 42,
-        input_dim: int | None = None,
+        input_dim: Optional[int] = None,
     ):
         self.hidden_dims = list(hidden_dims)
         self.dropout = dropout
@@ -76,8 +78,8 @@ class DeepFactorModel:
         self.patience = patience
         self.seed = seed
         self.input_dim = input_dim
-        self.feature_names_: list[str] = []
-        self._net: _MLP | None = None
+        self.feature_names_: List[str] = []
+        self._net: Optional[_MLP] = None
         self._y_mean = 0.0
         self._y_std = 1.0
 
@@ -87,11 +89,19 @@ class DeepFactorModel:
         arr = df.fillna(0.0).to_numpy(dtype=np.float32)
         return torch.tensor(arr, device=DEVICE)
 
-    def fit(self, X: pd.DataFrame, y: pd.Series, min_obs: int = 200) -> DeepFactorModel:
+    def fit(
+        self, X: pd.DataFrame, y: pd.Series, min_obs: int = 200
+    ) -> "DeepFactorModel":
         df = X.join(y.rename("y"), how="inner").dropna()
         if len(df) < min_obs:
             logger.warning("DeepFactor 训练样本不足（%d < %d），跳过", len(df), min_obs)
             return self
+        # The split/batch generators below are seeded, but layer
+        # initialisation uses PyTorch's global generator. Seed that generator
+        # as well so identical data/configuration produce identical scores.
+        torch.manual_seed(self.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(self.seed)
         self.feature_names_ = list(X.columns)
         feat = df[X.columns].fillna(0.0)
         target = df["y"].astype(np.float32).to_numpy()
@@ -106,22 +116,30 @@ class DeepFactorModel:
         val_idx, tr_idx = idx[:n_val].to(DEVICE), idx[n_val:].to(DEVICE)
 
         Xtr = self._to_tensor(feat.iloc[tr_idx.cpu()])
-        ytr = torch.tensor((target[tr_idx.cpu()] - self._y_mean) / self._y_std, device=DEVICE)
+        ytr = torch.tensor(
+            (target[tr_idx.cpu()] - self._y_mean) / self._y_std, device=DEVICE
+        )
         Xval = self._to_tensor(feat.iloc[val_idx.cpu()])
-        yval = torch.tensor((target[val_idx.cpu()] - self._y_mean) / self._y_std, device=DEVICE)
+        yval = torch.tensor(
+            (target[val_idx.cpu()] - self._y_mean) / self._y_std, device=DEVICE
+        )
 
-        self._net = _MLP(len(self.feature_names_), self.hidden_dims, self.dropout).to(DEVICE)
-        opt = torch.optim.AdamW(self._net.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(1, self.epochs))
+        self._net = _MLP(len(self.feature_names_), self.hidden_dims, self.dropout).to(
+            DEVICE
+        )
+        opt = torch.optim.AdamW(
+            self._net.parameters(), lr=self.lr, weight_decay=self.weight_decay
+        )
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt, T_max=max(1, self.epochs)
+        )
         loss_fn = nn.MSELoss()
 
         best_loss = float("inf")
         best_state = None
         patience_cnt = 0
         n_batch = max(1, self.batch_size)
-        last_epoch = -1
         for epoch in range(self.epochs):
-            last_epoch = epoch
             self._net.train()
             perm = torch.randperm(len(Xtr), generator=rng).to(DEVICE)
             for i in range(0, len(Xtr), n_batch):
@@ -140,7 +158,10 @@ class DeepFactorModel:
                 vloss = loss_fn(vpred, yval).item()
             if vloss < best_loss - 1e-6:
                 best_loss = vloss
-                best_state = {k: v.detach().cpu().clone() for k, v in self._net.state_dict().items()}
+                best_state = {
+                    k: v.detach().cpu().clone()
+                    for k, v in self._net.state_dict().items()
+                }
                 patience_cnt = 0
             else:
                 patience_cnt += 1
@@ -148,7 +169,9 @@ class DeepFactorModel:
                     break
         if best_state is not None:
             self._net.load_state_dict(best_state)
-        logger.info("DeepFactor 训练完成：epoch=%d best_val_loss=%.6f", last_epoch + 1, best_loss)
+        logger.info(
+            "DeepFactor 训练完成：epoch=%d best_val_loss=%.6f", epoch + 1, best_loss
+        )
         return self
 
     def predict(self, X: pd.DataFrame) -> pd.Series:
@@ -170,15 +193,16 @@ def optimize_deep_hyperparams(
     y_val: pd.Series,
     n_trials: int = 12,
     seed: int = 42,
-) -> dict[str, object]:
+) -> Dict[str, object]:
     """Optuna 超参搜索：返回最优超参 dict。
 
     目标为验证集 RankIC（越高越好），使用 Spearman 相关近似。
     """
-    import optuna
     from scipy.stats import spearmanr
 
-    def objective(trial: optuna.trial.Trial) -> float:
+    import optuna
+
+    def objective(trial: "optuna.trial.Trial") -> float:
         hidden = [
             trial.suggest_int("h1", 16, 128, step=16),
             trial.suggest_int("h2", 8, 64, step=8),

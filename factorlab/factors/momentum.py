@@ -1,5 +1,8 @@
 """动量因子：1M、3M、12-10（去最近 10 日以避开反转）。"""
+
 from __future__ import annotations
+
+from typing import Dict
 
 import pandas as pd
 
@@ -28,11 +31,11 @@ class MomentumFactor(Factor):
 
     def compute(
         self,
-        quotes: dict[str, pd.DataFrame],
+        quotes: Dict[str, pd.DataFrame],
         financials: pd.DataFrame | None = None,
         industry_map: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
-        out: dict[str, pd.Series] = {}
+        out: Dict[str, pd.Series] = {}
         for code, df in quotes.items():
             if "close" not in df.columns:
                 continue
@@ -54,11 +57,7 @@ class Mom3M(MomentumFactor):
 
 
 class Mom12_10(MomentumFactor):
-    """12 个月动量，跳过最近 1 个月（21 个交易日）以规避短期反转。
-
-    对应经典 Carhart (1997) MOM 定义：t-12 月至 t-1 月的累计收益。
-    因子名沿用业内 `12_10` 惯例写法，实际跳过窗口为 21 个交易日。
-    """
+    """12 个月动量跳过最近 10 日（经典 Carhart MOM）。"""
 
     def __init__(self):
         super().__init__("mom_12_10", lookback=252, skip=21)

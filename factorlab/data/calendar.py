@@ -1,13 +1,10 @@
-"""交易日历：统一 A 股交易日基准。"""
+"""交易日历：统一 A 股交易日基准，不静默混用数据源。"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
 
 import pandas as pd
-
-from factorlab.utils.common import get_logger
-
-logger = get_logger(__name__)
 
 
 def get_trading_calendar(
@@ -20,28 +17,37 @@ def get_trading_calendar(
     Args:
         start: 起始日（包含）。
         end: 截止日（包含）。
-        source: 数据源；synthetic/akshare/tushare。
+        source: 数据源；仅支持 ``synthetic`` 或 ``akshare``。
 
     Returns:
         排序的交易日 DatetimeIndex。
     """
     start = pd.Timestamp(start)
     end = pd.Timestamp(end)
+    source = str(source).lower().strip()
+    if start > end:
+        raise ValueError("start 不能晚于 end")
 
     if source == "akshare":
         try:
             import akshare as ak
 
             df = ak.tool_trade_date_hist_sina()
-            df["trade_date"] = pd.to_datetime(df["trade_date"])
-            mask = (df["trade_date"] >= start) & (df["trade_date"] <= end)
-            cal = df.loc[mask, "trade_date"].sort_values().reset_index(drop=True)
-            return pd.DatetimeIndex(cal)
-        except Exception as e:  # 网络/接口失败时降级
-            logger.warning("AkShare 获取交易日历失败：%s，使用 synthetic 兜底", e)
+            if df is None or df.empty or "trade_date" not in df.columns:
+                raise RuntimeError("AkShare 未返回有效交易日历")
+            dates = pd.to_datetime(df["trade_date"], errors="coerce").dropna()
+            mask = (dates >= start) & (dates <= end)
+            cal = pd.DatetimeIndex(dates.loc[mask].sort_values().unique())
+            if cal.empty:
+                raise RuntimeError("请求区间内没有 AkShare 交易日")
+            return cal
+        except Exception as exc:
+            raise RuntimeError("AkShare 交易日历加载失败，未切换到 synthetic") from exc
 
-    # synthetic：每个工作日都视为交易日（不含周末）。
-    return pd.bdate_range(start=start, end=end, freq="B")
+    if source == "synthetic":
+        # synthetic：每个工作日都视为交易日（不含周末和法定节假日）。
+        return pd.bdate_range(start=start, end=end, freq="B")
+    raise ValueError(f"不支持的交易日历数据源: {source!r}")
 
 
 def intersect_calendars(

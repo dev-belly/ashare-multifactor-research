@@ -2,9 +2,11 @@
 
 核心：永远只让"在切片开始日已发布"的财务因子进入训练/测试。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import List, Tuple
 
 import pandas as pd
 
@@ -22,6 +24,7 @@ class OOSFold:
     train_end: pd.Timestamp
     test_start: pd.Timestamp
     test_end: pd.Timestamp
+    test_end_inclusive: bool = False
 
 
 def expanding_window_splits(
@@ -31,7 +34,7 @@ def expanding_window_splits(
     step_years: int = 1,
     test_years: int = 1,
     step_freq: str = "yearly",
-) -> list[OOSFold]:
+) -> List[OOSFold]:
     """构造 expanding-window 切分。
 
     规则：
@@ -45,19 +48,25 @@ def expanding_window_splits(
         train_min_years: 初始训练窗口（年）。
         step_years: 每次扩展步长。
         test_years: 测试窗口长度。
-        step_freq: 'yearly' | 'quarterly' | 'monthly'。
+        step_freq: 当前仅支持 ``yearly``；窗口长度由 *_years 参数控制。
 
     Returns:
         OOSFold 列表。
     """
     start = pd.Timestamp(start)
     end = pd.Timestamp(end)
-    folds: list[OOSFold] = []
+    folds: List[OOSFold] = []
 
-    # 步进频率在 expanding window 下统一由 DateOffset 推进；
-    # 这里只做取值合法性校验，非法取值直接抛错而不是静默回退。
-    if step_freq not in {"yearly", "quarterly", "monthly"}:
-        raise ValueError(f"unknown step_freq {step_freq}")
+    if step_freq != "yearly":
+        raise ValueError(
+            "step_freq 当前仅支持 yearly；train/step/test 窗口均以年为单位"
+        )
+    if start >= end:
+        raise ValueError("start 必须早于 end")
+    if min(train_min_years, step_years, test_years) <= 0:
+        raise ValueError("train_min_years/step_years/test_years 必须为正数")
+    if step_years < test_years:
+        raise ValueError("step_years 不能小于 test_years，否则 OOS 区间会重叠")
 
     train_end = start + pd.DateOffset(years=train_min_years)
     fold_id = 0
@@ -71,15 +80,20 @@ def expanding_window_splits(
                 train_end=test_start,
                 test_start=test_start,
                 test_end=test_end,
+                # Data loaders treat the configured global end date as
+                # inclusive. Only the final fold may include its right edge;
+                # intermediate folds stay half-open to avoid overlap.
+                test_end_inclusive=test_end == end,
             )
         )
         logger.info(
-            "fold %d: train [%s, %s) | test [%s, %s]",
+            "fold %d: train [%s, %s) | test [%s, %s%s",
             fold_id,
             start.date(),
             test_start.date(),
             test_start.date(),
             test_end.date(),
+            "]" if test_end == end else ")",
         )
         # 推进
         train_end = test_start + pd.DateOffset(years=step_years)
@@ -92,7 +106,7 @@ def filter_panel_by_fold(
     panel: pd.DataFrame,
     fold: OOSFold,
     fin_dates: pd.Series | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """按 fold 切分面板。返回 (train_df, test_df)。
 
     关键：财务因子只能用 publish_date + lag 之后的日期。
@@ -102,8 +116,15 @@ def filter_panel_by_fold(
     if not isinstance(panel.index, pd.MultiIndex):
         raise ValueError("panel 必须是 (date, code) MultiIndex")
 
-    train = panel.loc[(panel.index.get_level_values("date") >= fold.train_start) &
-                      (panel.index.get_level_values("date") < fold.train_end)]
-    test = panel.loc[(panel.index.get_level_values("date") >= fold.test_start) &
-                     (panel.index.get_level_values("date") < fold.test_end)]
+    train = panel.loc[
+        (panel.index.get_level_values("date") >= fold.train_start)
+        & (panel.index.get_level_values("date") < fold.train_end)
+    ]
+    test_dates = panel.index.get_level_values("date")
+    test_end_mask = (
+        test_dates <= fold.test_end
+        if fold.test_end_inclusive
+        else test_dates < fold.test_end
+    )
+    test = panel.loc[(test_dates >= fold.test_start) & test_end_mask]
     return train, test

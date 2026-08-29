@@ -1,4 +1,3 @@
-"""样本外切分测试：核心是"训练永远不晚于测试"，杜绝前视。"""
 from __future__ import annotations
 
 import pandas as pd
@@ -7,45 +6,82 @@ import pytest
 from factorlab.backtest.oos_split import OOSFold, expanding_window_splits, filter_panel_by_fold
 
 
-def test_expanding_window_basic_structure():
-    folds = expanding_window_splits("2018-01-01", "2023-01-01", train_min_years=2, step_years=1, test_years=1)
-    assert len(folds) >= 3, "至少应产生 3 个 fold"
-    assert all(isinstance(f, OOSFold) for f in folds)
+def test_yearly_expanding_folds_are_non_overlapping() -> None:
+    folds = expanding_window_splits(
+        "2018-01-01",
+        "2022-01-01",
+        train_min_years=2,
+        step_years=1,
+        test_years=1,
+        step_freq="yearly",
+    )
 
-    ids = [f.fold_id for f in folds]
-    assert ids == list(range(len(folds))), "fold_id 必须连续递增"
+    assert len(folds) == 2
+    assert folds[0].train_end == pd.Timestamp("2020-01-01")
+    assert folds[0].test_end == folds[1].test_start
+    assert folds[1].train_end == pd.Timestamp("2021-01-01")
+    assert folds[0].test_end_inclusive is False
+    assert folds[1].test_end_inclusive is True
 
 
-def test_no_train_test_overlap():
-    """训练区间必须严格早于测试区间，且训练终点单调不减。"""
-    folds = expanding_window_splits("2018-01-01", "2024-01-01", train_min_years=2, step_years=1, test_years=1)
-    prev_train_end = pd.Timestamp("1970-01-01")
-    for f in folds:
-        assert f.train_end <= f.test_start, (
-            f"fold {f.fold_id} 出现前视: train_end={f.train_end} > test_start={f.test_start}"
+def test_only_final_fold_includes_configured_end_date() -> None:
+    folds = expanding_window_splits("2018-01-01", "2022-01-01", train_min_years=2)
+    dates = pd.date_range("2020-12-31", "2022-01-01", freq="D")
+    index = pd.MultiIndex.from_product([dates, ["A"]], names=["date", "code"])
+    panel = pd.DataFrame({"factor": 1.0}, index=index)
+
+    _, first_test = filter_panel_by_fold(panel, folds[0])
+    _, final_test = filter_panel_by_fold(panel, folds[-1])
+
+    assert pd.Timestamp("2021-01-01") not in first_test.index.get_level_values("date")
+    assert pd.Timestamp("2021-01-01") in final_test.index.get_level_values("date")
+    assert pd.Timestamp("2022-01-01") in final_test.index.get_level_values("date")
+
+
+def test_unsupported_or_overlapping_oos_windows_fail_explicitly() -> None:
+    with pytest.raises(ValueError, match="仅支持 yearly"):
+        expanding_window_splits("2018", "2022", step_freq="quarterly")
+    with pytest.raises(ValueError, match="不能小于"):
+        expanding_window_splits(
+            "2018", "2022", step_years=1, test_years=2, step_freq="yearly"
         )
-        assert f.train_end >= prev_train_end, "expanding window 的训练终点必须单调不减"
-        assert f.test_start < f.test_end, "每个 fold 的测试窗口必须非空"
-        prev_train_end = f.train_end
 
 
-def test_last_fold_respects_end_boundary():
+def test_expanding_window_basic_structure() -> None:
+    folds = expanding_window_splits(
+        "2018-01-01", "2023-01-01", train_min_years=2, step_years=1, test_years=1
+    )
+    assert len(folds) >= 3
+    assert all(isinstance(fold, OOSFold) for fold in folds)
+    assert [fold.fold_id for fold in folds] == list(range(len(folds)))
+
+
+def test_no_train_test_overlap() -> None:
+    folds = expanding_window_splits(
+        "2018-01-01", "2024-01-01", train_min_years=2, step_years=1, test_years=1
+    )
+    previous_train_end = pd.Timestamp("1970-01-01")
+    for fold in folds:
+        assert fold.train_end <= fold.test_start
+        assert fold.train_end >= previous_train_end
+        assert fold.test_start < fold.test_end
+        previous_train_end = fold.train_end
+
+
+def test_last_fold_respects_end_boundary() -> None:
     end = pd.Timestamp("2022-07-15")
-    folds = expanding_window_splits("2018-01-01", end, train_min_years=2, step_years=1, test_years=1)
-    assert all(f.test_end <= end for f in folds), "测试窗口不得越过总终点"
+    folds = expanding_window_splits(
+        "2018-01-01", end, train_min_years=2, step_years=1, test_years=1
+    )
+    assert all(fold.test_end <= end for fold in folds)
 
 
-def test_unknown_step_freq_raises():
-    with pytest.raises(ValueError):
-        expanding_window_splits("2018-01-01", "2021-01-01", step_freq="weekly")
+def _make_panel(dates: pd.DatetimeIndex, codes: list[str]) -> pd.DataFrame:
+    index = pd.MultiIndex.from_product([dates, codes], names=["date", "code"])
+    return pd.DataFrame({"f": range(len(index))}, index=index)
 
 
-def _make_panel(dates, codes):
-    idx = pd.MultiIndex.from_product([dates, codes], names=["date", "code"])
-    return pd.DataFrame({"f": range(len(idx))}, index=idx)
-
-
-def test_filter_panel_by_fold_splits_correctly():
+def test_filter_panel_by_fold_splits_correctly() -> None:
     dates = pd.date_range("2020-01-01", periods=40, freq="D")
     panel = _make_panel(dates, ["A", "B"])
     fold = OOSFold(0, dates[0], dates[20], dates[20], dates[30])
@@ -56,12 +92,16 @@ def test_filter_panel_by_fold_splits_correctly():
 
     assert train_dates.max() < fold.test_start
     assert test_dates.min() >= fold.test_start
-    assert len(train) + len(test) == 60  # 前 30 天 * 2 只股票
+    assert len(train) + len(test) == 60
 
 
-def test_filter_panel_requires_multiindex():
+def test_filter_panel_requires_multiindex() -> None:
+    fold = OOSFold(
+        0,
+        pd.Timestamp("2020-01-01"),
+        pd.Timestamp("2021-01-01"),
+        pd.Timestamp("2021-01-01"),
+        pd.Timestamp("2022-01-01"),
+    )
     with pytest.raises(ValueError, match="MultiIndex"):
-        filter_panel_by_fold(pd.DataFrame({"a": [1]}), OOSFold(0, pd.Timestamp("2020-01-01"),
-                                                               pd.Timestamp("2021-01-01"),
-                                                               pd.Timestamp("2021-01-01"),
-                                                               pd.Timestamp("2022-01-01")))
+        filter_panel_by_fold(pd.DataFrame({"a": [1]}), fold)

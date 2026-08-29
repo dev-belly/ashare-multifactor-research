@@ -1,7 +1,9 @@
 """可视化：净值曲线、IC 序列、分组收益、因子分布、稳健性热力图。"""
+
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Dict, List
 
 import matplotlib
 
@@ -22,7 +24,7 @@ def setup_style(style: str = "seaborn-v0_8-whitegrid", palette: str = "Set2"):
 
 
 def plot_nav_curve(
-    nav_dict: dict[str, pd.Series],
+    nav_dict: Dict[str, pd.Series],
     title: str = "Strategy NAV",
     out_path: str | Path | None = None,
 ):
@@ -59,7 +61,9 @@ def plot_ic_series(ic: pd.Series, title: str = "IC Time Series", out_path=None):
     return fig
 
 
-def plot_group_returns(group_ret: pd.DataFrame, title: str = "Group Returns", out_path=None):
+def plot_group_returns(
+    group_ret: pd.DataFrame, title: str = "Group Returns", out_path=None
+):
     fig, ax = plt.subplots(figsize=(10, 5))
     for col in group_ret.columns:
         nav = (1 + group_ret[col]).cumprod()
@@ -76,7 +80,9 @@ def plot_group_returns(group_ret: pd.DataFrame, title: str = "Group Returns", ou
     return fig
 
 
-def plot_factor_distribution(factor_panel: pd.DataFrame, factor_cols: list[str], out_path=None):
+def plot_factor_distribution(
+    factor_panel: pd.DataFrame, factor_cols: List[str], out_path=None
+):
     """最新一期截面分布。"""
     if factor_panel.empty:
         return None

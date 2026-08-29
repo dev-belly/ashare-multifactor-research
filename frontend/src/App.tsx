@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import ReactECharts from "echarts-for-react";
-import { fetchResults, triggerRun, fetchRunState, RunParams } from "./api";
+import { fetchResults } from "./api";
 import { Results, IcRow, Meta } from "./types";
 
 const MODEL_COLORS: Record<string, string> = {
+  benchmark: "#94a3b8",
   eq_weight: "#3b82f6",
   elastic_net: "#22c55e",
   lightgbm: "#f59e0b",
@@ -11,10 +12,10 @@ const MODEL_COLORS: Record<string, string> = {
   cross_section: "#06b6d4",
 };
 
-const fmtPct = (v?: number) =>
-  v === undefined || Number.isNaN(v) ? "—" : `${(v * 100).toFixed(1)}%`;
-const fmtNum = (v?: number, d = 2) =>
-  v === undefined || Number.isNaN(v) ? "—" : v.toFixed(d);
+const fmtPct = (v?: number | null) =>
+  v == null || !Number.isFinite(v) ? "—" : `${(v * 100).toFixed(1)}%`;
+const fmtNum = (v?: number | null, d = 2) =>
+  v == null || !Number.isFinite(v) ? "—" : v.toFixed(d);
 
 type Tab = "overview" | "ic" | "groups" | "robustness" | "cost";
 
@@ -233,51 +234,27 @@ export default function App() {
   const [results, setResults] = useState<Results | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
-  const [factor, setFactor] = useState<string>("");
-  const [running, setRunning] = useState(false);
-  const [runMsg, setRunMsg] = useState<string>("");
+  const [decayFactor, setDecayFactor] = useState<string>("");
+  const [groupFactor, setGroupFactor] = useState<string>("");
 
   const load = () => {
     fetchResults()
       .then((r) => {
         setResults(r);
         setError(null);
-        if (!factor && r.group_returns) setFactor(Object.keys(r.group_returns)[0] || "");
+        setDecayFactor(Object.keys(r.factor_decay || {})[0] || "");
+        setGroupFactor(Object.keys(r.group_returns || {})[0] || "");
       })
       .catch((e) => setError(String(e)));
   };
 
   useEffect(() => {
     load();
-    const t = setInterval(() => {
-      fetchRunState().then((s) => {
-        if (s.running && !running) setRunning(true);
-        if (!s.running && running) {
-          setRunning(false);
-          load();
-        }
-      });
-    }, 4000);
-    return () => clearInterval(t);
   }, []);
 
-  const onRun = async () => {
-    setRunning(true);
-    setRunMsg("流水线后台重算中…");
-    const params: RunParams = { models: results?.meta.models?.join(","), hpo: results?.meta.hpo_trials || 0 };
-    try {
-      await triggerRun(params);
-    } catch (e) {
-      setRunMsg("触发失败：" + String(e));
-      setRunning(false);
-    }
-  };
-
   const meta: Meta = results?.meta || {};
-  const topFactors = useMemo(() => {
-    if (!results) return [];
-    return Array.from(new Set(results.ic_summary.map((r) => r.factor)));
-  }, [results]);
+  const decayFactors = useMemo(() => Object.keys(results?.factor_decay || {}), [results]);
+  const groupFactors = useMemo(() => Object.keys(results?.group_returns || {}), [results]);
 
   if (error && !results) {
     return (
@@ -322,18 +299,7 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {running ? (
-              <span className="pill text-accent-glow">● 重算中</span>
-            ) : (
-              <span className="pill text-emerald-400">● 就绪</span>
-            )}
-            <button
-              onClick={onRun}
-              disabled={running}
-              className="rounded-lg bg-accent/90 hover:bg-accent px-3 py-1.5 text-sm font-medium disabled:opacity-40 transition"
-            >
-              重新运行流水线
-            </button>
+            <span className="pill text-emerald-400">● 只读结果</span>
           </div>
         </div>
         <nav className="px-6 flex gap-1 border-t border-ink-700/60">
@@ -356,7 +322,11 @@ export default function App() {
           <Stat label="样本区间" value={`${meta.start_date} ~ ${meta.end_date}`} />
           <Stat label="股票数" value={String(meta.universe_size ?? "—")} sub={`${meta.n_factors} 个因子`} />
           <Stat label="OOS 折数" value={String(meta.n_folds ?? "—")} sub={`持仓 ${meta.top_k} · 调仓 ${meta.rebal_freq}日`} />
-          <Stat label="数据源" value={meta.data_source ?? "—"} sub={meta.deep_enabled ? "含深度学习模型" : ""} />
+          <Stat
+            label="实际数据源"
+            value={meta.actual_data_source ?? meta.data_source ?? "—"}
+            sub={meta.fallback_reason ? "已发生显式降级" : (meta.deep_enabled ? "含深度学习模型" : "")}
+          />
           <Stat label="生成时间" value={(meta.generated_at || "").replace("T", " ").slice(0, 16)} />
         </div>
 
@@ -381,16 +351,16 @@ export default function App() {
               <div className="flex items-center gap-3 mb-3">
                 <span className="text-xs text-slate-400">因子：</span>
                 <select
-                  value={factor}
-                  onChange={(e) => setFactor(e.target.value)}
+                  value={decayFactor}
+                  onChange={(e) => setDecayFactor(e.target.value)}
                   className="bg-ink-700 border border-ink-500 rounded px-2 py-1 text-sm"
                 >
-                  {topFactors.map((f) => (
+                  {decayFactors.map((f) => (
                     <option key={f} value={f}>{f}</option>
                   ))}
                 </select>
               </div>
-              <DecayChart decay={results.factor_decay} factor={factor} />
+              <DecayChart decay={results.factor_decay} factor={decayFactor} />
             </div>
           </div>
         )}
@@ -401,21 +371,21 @@ export default function App() {
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm text-slate-300 font-medium">分组净值（G1 最低 → G5 最高，虚线为多空）</div>
                 <select
-                  value={factor}
-                  onChange={(e) => setFactor(e.target.value)}
+                  value={groupFactor}
+                  onChange={(e) => setGroupFactor(e.target.value)}
                   className="bg-ink-700 border border-ink-500 rounded px-2 py-1 text-sm"
                 >
-                  {topFactors.map((f) => (
+                  {groupFactors.map((f) => (
                     <option key={f} value={f}>{f}</option>
                   ))}
                 </select>
               </div>
-              {results.group_returns[factor] && <GroupChart group={results.group_returns[factor]} />}
-              {results.group_returns[factor] && (
+              {results.group_returns[groupFactor] && <GroupChart group={results.group_returns[groupFactor]} />}
+              {results.group_returns[groupFactor] && (
                 <div className="text-xs text-slate-400 mt-2">
-                  多空组合：年化 {fmtPct(results.group_returns[factor].ls_stats.annual_return)} · Sharpe{" "}
-                  {fmtNum(results.group_returns[factor].ls_stats.sharpe)} · 最大回撤{" "}
-                  {fmtPct(results.group_returns[factor].ls_stats.max_drawdown)}
+                  多空组合：年化 {fmtPct(results.group_returns[groupFactor].ls_stats.annual_return)} · Sharpe{" "}
+                  {fmtNum(results.group_returns[groupFactor].ls_stats.sharpe)} · 最大回撤{" "}
+                  {fmtPct(results.group_returns[groupFactor].ls_stats.max_drawdown)}
                 </div>
               )}
             </div>
@@ -440,7 +410,7 @@ export default function App() {
             <div className="card p-4">
               <div className="text-sm text-slate-300 mb-2 font-medium">换手率统计</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {Object.entries(results.model_nav).map(([m, info]) => (
+                {Object.entries(results.model_nav).filter(([m]) => m !== "benchmark").map(([m, info]) => (
                   <div key={m} className="rounded-lg border border-ink-600/50 bg-ink-700/40 px-3 py-2">
                     <div className="text-xs text-slate-400">{m}</div>
                     <div className="font-mono text-sm mt-1">
@@ -456,7 +426,7 @@ export default function App() {
       </main>
 
       <footer className="px-6 py-3 border-t border-ink-700/60 text-xs text-slate-500">
-        FactorLab 0.2.0 · 严格 expanding-window 样本外 · 财报 T+{ /* lag */ 90 }d 防泄漏 · 仅供研究，非投资建议
+        FactorLab 0.2.0 · expanding-window OOS · 折边界标签净化 · 下一交易日收盘执行 · 仅供研究，非投资建议
       </footer>
     </div>
   );
