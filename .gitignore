@@ -43,11 +43,5 @@ site/
 # ===== uv 锁定文件（提交以保证可复现安装） =====
 # uv.lock 已入库
 
-# GitHub Actions 工作流：ci.yml 已入库（tracked 文件不受 ignore 影响）。
-# 修改它需要令牌具备 workflow scope：
-#   gh auth refresh -h github.com -s workflow
-# 否则 git push 会被 GitHub 以 "without workflow scope" 拒绝。
-.github/workflows/
-
 # 生成的研究报告（由 `factorlab report` 产出，发布到 gh-pages 作为在线 Demo）
 outputs/results/report.html

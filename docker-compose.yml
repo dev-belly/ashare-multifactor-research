@@ -10,6 +10,9 @@ services:
     environment:
       - FACTORLAB_NATIVE_LGB=1
     volumes:
-      # 保留生成的结果与日志（可选）
-      - ./outputs:/app/outputs
+      # 命名卷保留生成结果，并兼容镜像内的非 root 服务用户。
+      - factorlab-outputs:/app/outputs
     restart: unless-stopped
+
+volumes:
+  factorlab-outputs:

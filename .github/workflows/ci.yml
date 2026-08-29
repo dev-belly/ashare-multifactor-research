@@ -6,19 +6,27 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   python:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
+          node-version: "24"
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
+          version: "0.12.4"
       - name: Set up Python
         run: uv python install 3.11
       - name: Sync dependencies
@@ -31,7 +39,7 @@ jobs:
         run: uv run mkdocs build --strict
       - name: Smoke test pipeline (synthetic)
         run: |
-          uv run factorlab run --data-source synthetic --models eq_weight,lightgbm,deep --hpo 0
+          uv run factorlab run --data-source synthetic --models eq_weight,elastic_net,lightgbm,deep --hpo 0
           uv run factorlab report
           test -s outputs/results/results.json
           test -s outputs/results/report.html
@@ -40,17 +48,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install & build
         working-directory: frontend
         run: |
           npm ci --no-audit --no-fund
           npm run build
       - name: Upload dist artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: frontend-dist
           path: frontend/dist
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build image
+        run: docker build --tag factorlab-ci:${{ github.sha }} .
+      - name: Verify non-root CLI runtime
+        run: |
+          docker run --rm factorlab-ci:${{ github.sha }} \
+            sh -c 'test "$(id -u)" -ne 0 && factorlab --help >/dev/null'

@@ -2,7 +2,7 @@
 
 ## 1. 安装
 
-需要 Python 3.11+、[uv](https://docs.astral.sh/uv/)；查看 React 前端源码还需要 Node.js。
+需要 Python 3.11+、[uv](https://docs.astral.sh/uv/)；构建 React 前端还需要 Node.js 24+。
 
 ```bash
 git clone https://github.com/dev-belly/ashare-multifactor-research.git
@@ -91,7 +91,7 @@ data:
 docker compose up --build
 ```
 
-首次启动若挂载目录中没有 `results.json`，容器会先生成一个 `eq_weight` 合成数据结果；后续启动复用已保存结果。然后访问 <http://localhost:8000>。
+首次启动若命名卷 `factorlab-outputs` 中没有 `results.json`，容器会先生成一个 `eq_weight` 合成数据结果；后续启动复用已保存结果。镜像内服务使用非 root 用户运行，并带 `/api/health` 健康检查。然后访问 <http://localhost:8000>。
 
 ## 7. 验证
 
