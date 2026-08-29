@@ -192,34 +192,38 @@ const C = {bg:'#070b14',line:'rgba(148,163,184,0.12)',txt:'#e5edf7',muted:'#8b98
 const MODEL_COLORS = {benchmark:'#94a3b8',eq_weight:'#38bdf8',elastic_net:'#34d399',lightgbm:'#f59e0b',deep:'#a78bfa'};
 const MODEL_LABEL = {benchmark:'股票池等权（无成本）',eq_weight:'等权复合',elastic_net:'ElasticNet',lightgbm:'LightGBM',deep:'深度学习(MLP)'};
 
-function fmtPct(x,n=2){return (x==null)?'—':(x*100).toFixed(n)+'%';}
-function fmtNum(x,n=2){return (x==null)?'—':x.toFixed(n);}
-function cls(x){return x>=0?'pos':'neg';}
+function asRecord(value){return value && typeof value==='object' && !Array.isArray(value) ? value : {};}
+function asArray(value){return Array.isArray(value) ? value : [];}
+function asFinite(value){return typeof value==='number' && Number.isFinite(value) ? value : null;}
+function rounded(value,n=4){const finite=asFinite(value);return finite==null?null:+finite.toFixed(n);}
+function fmtPct(x,n=2){const finite=asFinite(x);return finite==null?'—':(finite*100).toFixed(n)+'%';}
+function fmtNum(x,n=2){const finite=asFinite(x);return finite==null?'—':finite.toFixed(n);}
+function cls(x){const finite=asFinite(x);return finite!=null&&finite>=0?'pos':'neg';}
 function hexA(hex,a){const h=hex.replace('#','');const r=parseInt(h.substring(0,2),16),g=parseInt(h.substring(2,4),16),b=parseInt(h.substring(4,6),16);return `rgba(${r},${g},${b},${a})`;}
 function grad(color,a0,a1){return new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:hexA(color,a0)},{offset:1,color:hexA(color,a1)}]);}
 
 // ---- meta ----
-const m = DATA.meta||{};
+const m = asRecord(DATA.meta);
 document.getElementById('meta').innerHTML =
   `<span class="badge">数据源 ${m.data_source||'—'}</span>`+
-  `<span class="badge">样本 ${m.start_date} ~ ${m.end_date}</span>`+
+  `<span class="badge">样本 ${m.start_date||'—'} ~ ${m.end_date||'—'}</span>`+
   `<span class="badge">股票池 ${m.universe_size||'—'}</span>`+
   `<span class="badge">因子 ${m.n_factors||'—'}</span>`+
-  `<span class="badge">模型 ${((m.models)||[]).join('/')}</span>`+
+  `<span class="badge">模型 ${asArray(m.models).join('/')}</span>`+
   `<span class="badge">扩张窗口 ${m.n_folds||'—'} 折</span>`+
   `<span class="badge">生成 ${m.generated_at||'—'}</span>`;
 
 // ---- KPI ----
-const nav = DATA.model_nav||{};
+const nav = asRecord(DATA.model_nav);
 const strategyNav = Object.fromEntries(Object.entries(nav).filter(([k])=>k!=='benchmark'));
 function bestBy(key,hi=true){
   let best=null;
-  for(const k in strategyNav){const v=strategyNav[k].perf||{}; const n=Number(v[key]); if(!Number.isFinite(n)) continue; if(best==null||(hi? n>best.n : n<best.n)) best={k,v,n};}
+  for(const k in strategyNav){const v=asRecord(asRecord(strategyNav[k]).perf); const n=asFinite(v[key]); if(n==null) continue; if(best==null||(hi? n>best.n : n<best.n)) best={k,v,n};}
   return best;
 }
 const bestSharpe = bestBy('sharpe',true);
 const bestRet = bestBy('annual_return',true);
-const ic = (DATA.ic_summary||[]).slice().sort((a,b)=>Math.abs(b.ir)-Math.abs(a.ir));
+const ic = asArray(DATA.ic_summary).filter(r=>r&&typeof r==='object').slice().sort((a,b)=>Math.abs(asFinite(b.ir)||0)-Math.abs(asFinite(a.ir)||0));
 const topFactor = ic[0]||{};
 const kpiAccent = [C.cyan, C.bear, C.amber, C.violet];
 const kpis = [
@@ -239,17 +243,17 @@ document.getElementById('kpis').innerHTML = kpis.map((k,i)=>
 // ---- NAV chart ----
 const navChart = echarts.init(document.getElementById('navChart'),'factorlab');
 const models = Object.keys(nav);
-const firstNav = models.length ? (nav[models[0]].nav||{}) : {};
+const firstNav = models.length ? asRecord(asRecord(nav[models[0]]).nav) : {};
 const baseDates = Array.isArray(firstNav.dates) ? firstNav.dates : [];
 const seriesNav = models.map(k=>{
-  const modelNav = nav[k].nav||{};
+  const modelNav = asRecord(asRecord(nav[k]).nav);
   const dates = Array.isArray(modelNav.dates) ? modelNav.dates : [];
   const values = Array.isArray(modelNav.values) ? modelNav.values : [];
   const valuesByDate = new Map(dates.map((d,i)=>[d,values[i]]));
   const color = MODEL_COLORS[k]||'#888';
   const vals = baseDates.map(d=>{
     const value = valuesByDate.get(d);
-    return Number.isFinite(value) ? +value.toFixed(4) : null;
+    return rounded(value);
   });
   return {name:MODEL_LABEL[k]||k, type:'line', showSymbol:false, smooth:true,
     lineStyle:{width:2.4,color,shadowColor:color,shadowBlur:10}, itemStyle:{color},
@@ -261,7 +265,7 @@ navChart.setOption({
   legend:{textStyle:{color:C.muted},top:0},
   grid:{left:54,right:20,top:36,bottom:30},
   xAxis:{type:'category',data:baseDates,axisLabel:{color:C.muted},axisLine:{lineStyle:{color:C.line}}},
-  yAxis:{type:'value',scale:true,axisLabel:{color:C.muted,formatter:v=>v.toFixed(2)},splitLine:{lineStyle:{color:C.line}}},
+  yAxis:{type:'value',scale:true,axisLabel:{color:C.muted,formatter:v=>fmtNum(v,2)},splitLine:{lineStyle:{color:C.line}}},
   series:[...seriesNav,{type:'line',data:[],markLine:{silent:true,symbol:'none',lineStyle:{color:'#475569',type:'dashed',width:1},data:[{yAxis:1}],label:{show:false}}}]
 });
 
@@ -277,15 +281,15 @@ tb.innerHTML = ic.map(r=>{
 }).join('');
 
 // ---- decay heatmap ----
-const decay = DATA.factor_decay||{};
+const decay = asRecord(DATA.factor_decay);
 const fkeys = Object.keys(decay);
-const maxLag = fkeys.length? Math.max(...fkeys.map(f=>decay[f].length)) : 0;
+const maxLag = fkeys.length? Math.max(...fkeys.map(f=>asArray(decay[f]).length)) : 0;
 const hd=[]; let dmax=0,dmin=0;
 fkeys.forEach((f,fi)=>{
-  decay[f].forEach(p=>{
-    const v=Number(p.ic_mean);
-    if(!Number.isFinite(v)) return;
-    hd.push([p.lag-1,fi,+v.toFixed(3)]);
+  asArray(decay[f]).forEach(p=>{
+    const row=asRecord(p); const v=asFinite(row.ic_mean); const lag=asFinite(row.lag);
+    if(v==null||lag==null) return;
+    hd.push([lag-1,fi,rounded(v,3)]);
     if(v>dmax)dmax=v;
     if(v<dmin)dmin=v;
   });
@@ -305,19 +309,21 @@ decayChart.setOption({
 });
 
 // ---- group long-short (top factor) ----
-const gr = DATA.group_returns||{};
+const gr = asRecord(DATA.group_returns);
 const topF = topFactor.factor && gr[topFactor.factor] ? topFactor.factor : (Object.keys(gr)[0]||null);
 const groupChart = echarts.init(document.getElementById('groupChart'),'factorlab');
 if(topF){
-  const g = gr[topF];
-  const dates = (g.long_short||{}).dates||[];
-  const gs = Object.keys(g.groups||{}).sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)));
+  const g = asRecord(gr[topF]);
+  const longShort = asRecord(g.long_short);
+  const dates = asArray(longShort.dates);
+  const groups = asRecord(g.groups);
+  const gs = Object.keys(groups).sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)));
   const palette=[C.bear,'#7dd3a0','#9aa7b8','#f0a',C.bull];
   const s = gs.map((gn,i)=>({name:gn,type:'line',showSymbol:false,smooth:true,
-    lineStyle:{width:1.5,color:palette[i%palette.length]},data:(g.groups[gn].values||[]).map(v=>+v.toFixed(4))}));
+    lineStyle:{width:1.5,color:palette[i%palette.length]},data:asArray(asRecord(groups[gn]).values).map(v=>rounded(v))}));
   s.push({name:'多空(L-S)',type:'line',showSymbol:false,smooth:true,
     lineStyle:{width:3,color:C.violet,shadowColor:C.violet,shadowBlur:12},itemStyle:{color:C.violet},
-    areaStyle:{color:grad(C.violet,0.14,0)},data:((g.long_short||{}).values||[]).map(v=>+v.toFixed(4))});
+    areaStyle:{color:grad(C.violet,0.14,0)},data:asArray(longShort.values).map(v=>rounded(v))});
   groupChart.setOption({
     backgroundColor:'transparent',tooltip:{trigger:'axis',axisPointer:{type:'line',lineStyle:{color:'#334155'}}},legend:{textStyle:{color:C.muted},top:0},
     grid:{left:55,right:20,top:36,bottom:30},
@@ -332,35 +338,35 @@ if(topF){
 }
 
 // ---- cost robustness ----
-const cost = DATA.cost_scenarios||{};
+const cost = asRecord(DATA.cost_scenarios);
 const costKeys = Object.keys(cost).sort((a,b)=>Number(a)-Number(b));
 const bps = costKeys.map(Number);
 const costChart = echarts.init(document.getElementById('costChart'),'factorlab');
-const cm = costKeys.length ? Object.keys(cost[costKeys[0]]||{}) : [];
+const cm = costKeys.length ? Object.keys(asRecord(cost[costKeys[0]])) : [];
 const cs = cm.map(k=>{const color=MODEL_COLORS[k]||'#888';return {name:MODEL_LABEL[k]||k,type:'line',showSymbol:true,symbolSize:7,smooth:true,
   lineStyle:{width:2.4,color,shadowColor:color,shadowBlur:8},itemStyle:{color},
-  data:costKeys.map(key=> cost[key] && cost[key][k] && Number.isFinite(cost[key][k].annual_return) ? +cost[key][k].annual_return.toFixed(4):null)};});
+  data:costKeys.map(key=>rounded(asRecord(asRecord(cost[key])[k]).annual_return))};});
 costChart.setOption({
-  backgroundColor:'transparent',tooltip:{trigger:'axis',valueFormatter:v=>(v==null?'—':(v*100).toFixed(1)+'%')},
+  backgroundColor:'transparent',tooltip:{trigger:'axis',valueFormatter:v=>fmtPct(v,1)},
   legend:{textStyle:{color:C.muted},top:0},
   grid:{left:55,right:20,top:36,bottom:40},
   xAxis:{type:'category',data:bps.map(b=>b+'bps'),name:'单边费率',axisLabel:{color:C.muted},axisLine:{lineStyle:{color:C.line}}},
-  yAxis:{type:'value',axisLabel:{color:C.muted,formatter:v=>(v*100).toFixed(0)+'%'},splitLine:{lineStyle:{color:C.line}}},
+  yAxis:{type:'value',axisLabel:{color:C.muted,formatter:v=>fmtPct(v,0)},splitLine:{lineStyle:{color:C.line}}},
   series:cs
 });
 
 // ---- robustness bull/neutral/bear ----
-const rob = DATA.robustness||{};
+const rob = asRecord(DATA.robustness);
 const rk = Object.keys(rob);
 const mkSeries=(key,color)=>({name:key,type:'bar',itemStyle:{color,borderRadius:[4,4,0,0]},
-  data:rk.map(k=> rob[k][key]? +rob[k][key].annual_return.toFixed(4):null)});
+  data:rk.map(k=>rounded(asRecord(asRecord(rob[k])[key]).annual_return))});
 const robChart = echarts.init(document.getElementById('robChart'),'factorlab');
 robChart.setOption({
-  backgroundColor:'transparent',tooltip:{trigger:'axis',valueFormatter:v=>(v==null?'—':(v*100).toFixed(0)+'%')},
+  backgroundColor:'transparent',tooltip:{trigger:'axis',valueFormatter:v=>fmtPct(v,0)},
   legend:{textStyle:{color:C.muted},top:0},
   grid:{left:55,right:20,top:36,bottom:30},
   xAxis:{type:'category',data:rk.map(k=>MODEL_LABEL[k]||k),axisLabel:{color:C.muted},axisLine:{lineStyle:{color:C.line}}},
-  yAxis:{type:'value',axisLabel:{color:C.muted,formatter:v=>(v*100).toFixed(0)+'%'},splitLine:{lineStyle:{color:C.line}}},
+  yAxis:{type:'value',axisLabel:{color:C.muted,formatter:v=>fmtPct(v,0)},splitLine:{lineStyle:{color:C.line}}},
   series:[mkSeries('bull',C.bull),mkSeries('neutral',C.cyan),mkSeries('bear',C.bear)]
 });
 

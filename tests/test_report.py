@@ -72,14 +72,7 @@ def _inline_report_script(html: str) -> str:
     return scripts[1].split("</script>", 1)[0]
 
 
-def test_generated_report_executes_with_pipeline_schema(tmp_path: Path) -> None:
-    node = shutil.which("node")
-    assert node, "Node.js is required to exercise the generated report JavaScript"
-
-    report_path = build_report(_pipeline_result_schema(), tmp_path / "report.html")
-    report_script = _inline_report_script(report_path.read_text(encoding="utf-8"))
-
-    harness = r"""
+_NODE_HARNESS = r"""
 const elements = new Map();
 const chartOptions = new Map();
 function element(id) {
@@ -101,6 +94,24 @@ global.echarts = {
   }),
 };
 """
+
+
+def _execute_report_script(report_script: str, assertions: str = "") -> None:
+    node = shutil.which("node")
+    assert node, "Node.js is required to exercise the generated report JavaScript"
+    result = subprocess.run(
+        [node, "-e", _NODE_HARNESS + report_script + assertions],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_generated_report_executes_with_pipeline_schema(tmp_path: Path) -> None:
+    report_path = build_report(_pipeline_result_schema(), tmp_path / "report.html")
+    report_script = _inline_report_script(report_path.read_text(encoding="utf-8"))
+
     assertions = r"""
 const navOption = chartOptions.get('navChart');
 if (!navOption || JSON.stringify(navOption.xAxis.data) !== JSON.stringify(['2024-01-02','2024-01-03'])) {
@@ -121,14 +132,39 @@ for (const id of ['navChart','decayChart','groupChart','costChart','robChart']) 
   if (!chartOptions.has(id)) throw new Error(`${id} is blank`);
 }
 """
+    _execute_report_script(report_script, assertions)
 
-    result = subprocess.run(
-        [node, "-e", harness + report_script + assertions],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
+
+def test_generated_report_tolerates_missing_optional_metrics(tmp_path: Path) -> None:
+    results = _pipeline_result_schema()
+    results["model_nav"]["eq_weight"]["perf"] = {}
+    results["ic_summary"] = [{"factor": "ep", "method": "spearman"}]
+    results["factor_decay"] = {"ep": [{"lag": 1}]}
+    results["group_returns"]["ep"]["groups"]["G1"]["values"] = [1.0, None]
+    results["group_returns"]["ep"]["long_short"]["values"] = [1.0, None]
+    results["cost_scenarios"] = {"0.0": {"eq_weight": {}}}
+    results["robustness"] = {
+        "eq_weight": {"bull": {}, "neutral": None}
+    }
+
+    report_path = build_report(results, tmp_path / "sparse-report.html")
+    report_script = _inline_report_script(report_path.read_text(encoding="utf-8"))
+
+    assertions = r"""
+const robustness = chartOptions.get('robChart');
+if (!robustness || robustness.series.some(series => series.data[0] !== null)) {
+  throw new Error('Missing robustness metrics were not rendered as null');
+}
+const groups = chartOptions.get('groupChart');
+if (!groups || groups.series[0].data[1] !== null) {
+  throw new Error('Missing group values were not rendered as null');
+}
+const costs = chartOptions.get('costChart');
+if (!costs || costs.series[0].data[0] !== null) {
+  throw new Error('Missing cost metrics were not rendered as null');
+}
+"""
+    _execute_report_script(report_script, assertions)
 
 
 def test_report_embeds_results_as_utf8_json(tmp_path: Path) -> None:

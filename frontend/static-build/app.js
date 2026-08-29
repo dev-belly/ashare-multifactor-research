@@ -28,9 +28,25 @@ const C = {
 };
 
 const fmtPct = (v) =>
-  v === undefined || v === null || Number.isNaN(v) ? "—" : `${(v * 100).toFixed(1)}%`;
+  typeof v !== "number" || !Number.isFinite(v) ? "—" : `${(v * 100).toFixed(1)}%`;
 const fmtNum = (v, d = 2) =>
-  v === undefined || v === null || Number.isNaN(v) ? "—" : Number(v).toFixed(d);
+  typeof v !== "number" || !Number.isFinite(v) ? "—" : v.toFixed(d);
+
+const asRecord = (value) =>
+  value && typeof value === "object" && !Array.isArray(value) ? value : {};
+function normalizeResults(value) {
+  const result = asRecord(value);
+  return {
+    meta: asRecord(result.meta),
+    model_nav: asRecord(result.model_nav),
+    cost_scenarios: asRecord(result.cost_scenarios),
+    ic_summary: Array.isArray(result.ic_summary) ? result.ic_summary : [],
+    group_returns: asRecord(result.group_returns),
+    factor_decay: asRecord(result.factor_decay),
+    robustness: asRecord(result.robustness),
+    feature_importance: asRecord(result.feature_importance),
+  };
+}
 
 function hexA(hex, a) {
   const h = hex.replace("#", "");
@@ -508,12 +524,19 @@ function App() {
 
   const load = () => {
     fetch("/api/results")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
-      .then((r) => {
-        setResults(r);
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          const message = payload && payload.error && payload.error.message;
+          throw new Error(message || `结果接口请求失败（HTTP ${response.status}）`);
+        }
+        return normalizeResults(payload);
+      })
+      .then((normalized) => {
+        setResults(normalized);
         setError(null);
-        setDecayFactor(Object.keys(r.factor_decay || {})[0] || "");
-        setGroupFactor(Object.keys(r.group_returns || {})[0] || "");
+        setDecayFactor(Object.keys(normalized.factor_decay)[0] || "");
+        setGroupFactor(Object.keys(normalized.group_returns)[0] || "");
       })
       .catch((e) => setError(String(e)));
   };
@@ -526,6 +549,7 @@ function App() {
   const meta = (results && results.meta) || {};
   const decayFactors = useMemo(() => Object.keys((results && results.factor_decay) || {}), [results]);
   const groupFactors = useMemo(() => Object.keys((results && results.group_returns) || {}), [results]);
+  const hasModelNav = Object.keys((results && results.model_nav) || {}).length > 0;
 
   if (error && !results) {
     return (
@@ -589,23 +613,36 @@ function App() {
       <main className="flex-1 px-6 py-5 max-w-[1400px] w-full mx-auto">
         <div className="flex flex-wrap gap-3 mb-5">
           <Stat label="样本区间" value={`${meta.start_date || "—"} ~ ${meta.end_date || "—"}`} />
-          <Stat label="股票数" value={String(meta.universe_size ?? "—")} sub={`${meta.n_factors} 个因子`} />
-          <Stat label="OOS 折数" value={String(meta.n_folds ?? "—")} sub={`持仓 ${meta.top_k} · 调仓 ${meta.rebal_freq}日`} />
+          <Stat label="股票数" value={String(meta.universe_size ?? "—")} sub={`${meta.n_factors ?? "—"} 个因子`} />
+          <Stat label="OOS 折数" value={String(meta.n_folds ?? "—")} sub={`持仓 ${meta.top_k ?? "—"} · 调仓 ${meta.rebal_freq ?? "—"}日`} />
           <Stat label="实际数据源" value={meta.actual_data_source ?? meta.data_source ?? "—"} sub={meta.fallback_reason ? "已发生显式降级" : (meta.deep_enabled ? "含深度学习模型" : "")} />
           <Stat label="生成时间" value={(meta.generated_at || "").replace("T", " ").slice(0, 16)} />
         </div>
 
+        {!hasModelNav && (
+          <div className="glass p-6 text-center mb-5 fade-up">
+            <div className="text-amber text-lg font-semibold">暂无模型净值结果</div>
+            <div className="text-slate-400 mt-2 text-sm">
+              结果文件已加载，但其中没有可展示的 model_nav 数据。请重新运行研究流水线生成完整结果。
+            </div>
+          </div>
+        )}
+
         {tab === "overview" && (
           <div className="space-y-5">
-            <KpiHero results={results} />
-            <div className="glass p-4 fade-up">
-              <div className="flex items-center justify-between mb-1">
-                <div className="text-sm font-semibold text-slate-200">样本外净值曲线</div>
-                <div className="text-[11px] text-slate-500">基准 = 1.0 · 扩张窗口 · 下一交易日收盘执行</div>
-              </div>
-              <NavChart results={results} />
-            </div>
-            <PerfTable results={results} />
+            {hasModelNav && (
+              <>
+                <KpiHero results={results} />
+                <div className="glass p-4 fade-up">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-sm font-semibold text-slate-200">样本外净值曲线</div>
+                    <div className="text-[11px] text-slate-500">基准 = 1.0 · 扩张窗口 · 下一交易日收盘执行</div>
+                  </div>
+                  <NavChart results={results} />
+                </div>
+                <PerfTable results={results} />
+              </>
+            )}
           </div>
         )}
 
@@ -642,12 +679,12 @@ function App() {
                   {groupFactors.map((f) => (<option key={f} value={f}>{f}</option>))}
                 </select>
               </div>
-              <GroupChart group={results.group_returns[groupFactor]} />
-              {results.group_returns[groupFactor] && (
+              <GroupChart group={results.group_returns?.[groupFactor]} />
+              {results.group_returns?.[groupFactor] && (
                 <div className="text-xs text-slate-400 mt-3 flex gap-4 flex-wrap">
-                  <span>多空年化 <b className="num text-bull">{fmtPct(results.group_returns[groupFactor].ls_stats.annual_return)}</b></span>
-                  <span>多空 Sharpe <b className="num text-cyan">{fmtNum(results.group_returns[groupFactor].ls_stats.sharpe)}</b></span>
-                  <span>多空最大回撤 <b className="num text-bear">{fmtPct(results.group_returns[groupFactor].ls_stats.max_drawdown)}</b></span>
+                  <span>多空年化 <b className="num text-bull">{fmtPct(results.group_returns[groupFactor].ls_stats?.annual_return)}</b></span>
+                  <span>多空 Sharpe <b className="num text-cyan">{fmtNum(results.group_returns[groupFactor].ls_stats?.sharpe)}</b></span>
+                  <span>多空最大回撤 <b className="num text-bear">{fmtPct(results.group_returns[groupFactor].ls_stats?.max_drawdown)}</b></span>
                 </div>
               )}
             </div>

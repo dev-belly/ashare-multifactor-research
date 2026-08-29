@@ -30,7 +30,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 function PerfTable({ results }: { results: Results }) {
-  const rows = Object.entries(results.model_nav).map(([name, m]) => ({ name, perf: m.perf }));
+  const rows = Object.entries(results.model_nav || {}).map(([name, m]) => ({ name, perf: m?.perf || {} }));
   return (
     <div className="card overflow-hidden">
       <table className="w-full text-sm">
@@ -70,15 +70,19 @@ function PerfTable({ results }: { results: Results }) {
 }
 
 function NavChart({ results }: { results: Results }) {
-  const series = Object.entries(results.model_nav).map(([name, m]) => ({
-    name,
-    type: "line",
-    showSymbol: false,
-    smooth: true,
-    lineStyle: { width: 2 },
-    itemStyle: { color: MODEL_COLORS[name] || "#888" },
-    data: m.nav.dates.map((d, i) => [d, m.nav.values[i]]),
-  }));
+  const series = Object.entries(results.model_nav || {}).map(([name, m]) => {
+    const dates = Array.isArray(m?.nav?.dates) ? m.nav.dates : [];
+    const values = Array.isArray(m?.nav?.values) ? m.nav.values : [];
+    return {
+      name,
+      type: "line",
+      showSymbol: false,
+      smooth: true,
+      lineStyle: { width: 2 },
+      itemStyle: { color: MODEL_COLORS[name] || "#888" },
+      data: dates.map((d, i) => [d, values[i] ?? null]),
+    };
+  });
   const option: any = {
     backgroundColor: "transparent",
     grid: { left: 50, right: 20, top: 40, bottom: 40 },
@@ -102,9 +106,10 @@ function NavChart({ results }: { results: Results }) {
 }
 
 function IcHeatmap({ ic }: { ic: IcRow[] }) {
-  const factors = Array.from(new Set(ic.map((r) => r.factor)));
-  const methods = Array.from(new Set(ic.map((r) => r.method)));
-  const data: [number, number, number][] = ic.map((r) => [
+  const rows = Array.isArray(ic) ? ic : [];
+  const factors = Array.from(new Set(rows.map((r) => r.factor)));
+  const methods = Array.from(new Set(rows.map((r) => r.method)));
+  const data: [number, number, number][] = rows.map((r) => [
     methods.indexOf(r.method),
     factors.indexOf(r.factor),
     Number((r.ir || 0).toFixed(3)),
@@ -145,7 +150,9 @@ function GroupChart({ group }: { group: any }) {
     type: "line",
     showSymbol: false,
     smooth: true,
-    data: group.groups[k].dates.map((d: string, i: number) => [d, group.groups[k].values[i]]),
+    data: (Array.isArray(group.groups[k]?.dates) ? group.groups[k].dates : []).map(
+      (d: string, i: number) => [d, group.groups[k]?.values?.[i] ?? null],
+    ),
     itemStyle: { color: k === keys[keys.length - 1] ? "#ef4444" : k === keys[0] ? "#22c55e" : undefined },
   }));
   series.push({
@@ -154,7 +161,9 @@ function GroupChart({ group }: { group: any }) {
     showSymbol: false,
     smooth: true,
     lineStyle: { width: 3, type: "dashed" },
-    data: group.long_short.dates.map((d: string, i: number) => [d, group.long_short.values[i]]),
+    data: (Array.isArray(group.long_short?.dates) ? group.long_short.dates : []).map(
+      (d: string, i: number) => [d, group.long_short?.values?.[i] ?? null],
+    ),
     itemStyle: { color: "#a855f7" },
   });
   const option: any = {
@@ -185,7 +194,7 @@ function RobustTable({ results }: { results: Results }) {
         </thead>
         <tbody>
           {models.map((m) => {
-            const r = results.robustness[m];
+            const r = results.robustness[m] || {};
             return (
               <tr key={m} className="border-t border-ink-600/40">
                 <td className="px-4 py-2 font-medium">
@@ -215,7 +224,7 @@ function CostChart({ results }: { results: Results }) {
     type: "line",
     smooth: true,
     symbol: "circle",
-    data: costs.map((c) => results.cost_scenarios[c][m]?.annual_return ?? null),
+    data: costs.map((c) => results.cost_scenarios[c]?.[m]?.annual_return ?? null),
     itemStyle: { color: MODEL_COLORS[m] || "#888" },
   }));
   const option: any = {
@@ -255,6 +264,7 @@ export default function App() {
   const meta: Meta = results?.meta || {};
   const decayFactors = useMemo(() => Object.keys(results?.factor_decay || {}), [results]);
   const groupFactors = useMemo(() => Object.keys(results?.group_returns || {}), [results]);
+  const hasModelNav = Object.keys(results?.model_nav || {}).length > 0;
 
   if (error && !results) {
     return (
@@ -319,9 +329,9 @@ export default function App() {
 
       <main className="flex-1 px-6 py-5">
         <div className="flex flex-wrap gap-3 mb-5">
-          <Stat label="样本区间" value={`${meta.start_date} ~ ${meta.end_date}`} />
-          <Stat label="股票数" value={String(meta.universe_size ?? "—")} sub={`${meta.n_factors} 个因子`} />
-          <Stat label="OOS 折数" value={String(meta.n_folds ?? "—")} sub={`持仓 ${meta.top_k} · 调仓 ${meta.rebal_freq}日`} />
+          <Stat label="样本区间" value={`${meta.start_date ?? "—"} ~ ${meta.end_date ?? "—"}`} />
+          <Stat label="股票数" value={String(meta.universe_size ?? "—")} sub={`${meta.n_factors ?? "—"} 个因子`} />
+          <Stat label="OOS 折数" value={String(meta.n_folds ?? "—")} sub={`持仓 ${meta.top_k ?? "—"} · 调仓 ${meta.rebal_freq ?? "—"}日`} />
           <Stat
             label="实际数据源"
             value={meta.actual_data_source ?? meta.data_source ?? "—"}
@@ -330,13 +340,26 @@ export default function App() {
           <Stat label="生成时间" value={(meta.generated_at || "").replace("T", " ").slice(0, 16)} />
         </div>
 
+        {!hasModelNav && (
+          <div className="card p-6 text-center mb-5">
+            <div className="text-amber-400 text-lg">暂无模型净值结果</div>
+            <div className="text-slate-400 mt-2 text-sm">
+              结果文件已加载，但其中没有可展示的 model_nav 数据。请重新运行研究流水线生成完整结果。
+            </div>
+          </div>
+        )}
+
         {tab === "overview" && (
           <div className="space-y-5">
-            <div className="card p-4">
-              <div className="text-sm text-slate-300 mb-2 font-medium">样本外净值曲线（基准=1.0）</div>
-              <NavChart results={results} />
-            </div>
-            <PerfTable results={results} />
+            {hasModelNav && (
+              <>
+                <div className="card p-4">
+                  <div className="text-sm text-slate-300 mb-2 font-medium">样本外净值曲线（基准=1.0）</div>
+                  <NavChart results={results} />
+                </div>
+                <PerfTable results={results} />
+              </>
+            )}
           </div>
         )}
 
@@ -380,12 +403,12 @@ export default function App() {
                   ))}
                 </select>
               </div>
-              {results.group_returns[groupFactor] && <GroupChart group={results.group_returns[groupFactor]} />}
-              {results.group_returns[groupFactor] && (
+              {results.group_returns?.[groupFactor] && <GroupChart group={results.group_returns[groupFactor]} />}
+              {results.group_returns?.[groupFactor] && (
                 <div className="text-xs text-slate-400 mt-2">
-                  多空组合：年化 {fmtPct(results.group_returns[groupFactor].ls_stats.annual_return)} · Sharpe{" "}
-                  {fmtNum(results.group_returns[groupFactor].ls_stats.sharpe)} · 最大回撤{" "}
-                  {fmtPct(results.group_returns[groupFactor].ls_stats.max_drawdown)}
+                  多空组合：年化 {fmtPct(results.group_returns[groupFactor].ls_stats?.annual_return)} · Sharpe{" "}
+                  {fmtNum(results.group_returns[groupFactor].ls_stats?.sharpe)} · 最大回撤{" "}
+                  {fmtPct(results.group_returns[groupFactor].ls_stats?.max_drawdown)}
                 </div>
               )}
             </div>
@@ -410,13 +433,13 @@ export default function App() {
             <div className="card p-4">
               <div className="text-sm text-slate-300 mb-2 font-medium">换手率统计</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {Object.entries(results.model_nav).filter(([m]) => m !== "benchmark").map(([m, info]) => (
+                {Object.entries(results.model_nav || {}).filter(([m]) => m !== "benchmark").map(([m, info]) => (
                   <div key={m} className="rounded-lg border border-ink-600/50 bg-ink-700/40 px-3 py-2">
                     <div className="text-xs text-slate-400">{m}</div>
                     <div className="font-mono text-sm mt-1">
-                      年均换手 <span className="text-accent-glow">{fmtNum(info.turnover.annualized, 2)}</span>
+                      年均换手 <span className="text-accent-glow">{fmtNum(info.turnover?.annualized, 2)}</span>
                     </div>
-                    <div className="font-mono text-xs text-slate-500">调仓次数 {info.turnover.n_rebalances ?? "—"}</div>
+                    <div className="font-mono text-xs text-slate-500">调仓次数 {info.turnover?.n_rebalances ?? "—"}</div>
                   </div>
                 ))}
               </div>

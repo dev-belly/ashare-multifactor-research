@@ -17,9 +17,9 @@ export interface Perf {
 }
 
 export interface ModelNav {
-  nav: Series;
-  perf: Perf;
-  turnover: { avg?: number; max?: number; n_rebalances?: number; annualized?: number };
+  nav?: Partial<Series>;
+  perf?: Perf;
+  turnover?: { avg?: number; max?: number; n_rebalances?: number; annualized?: number };
 }
 
 export interface Meta {
@@ -64,9 +64,9 @@ export interface DecayRow {
 }
 
 export interface GroupFactor {
-  groups: Record<string, Series>;
-  long_short: Series;
-  ls_stats: Perf;
+  groups?: Record<string, Partial<Series>>;
+  long_short?: Partial<Series>;
+  ls_stats?: Perf;
 }
 
 export interface RobustRegime {

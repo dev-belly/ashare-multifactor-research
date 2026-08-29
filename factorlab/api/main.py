@@ -38,10 +38,44 @@ _app_lock = threading.Lock()
 _run_state: Dict[str, Any] = {"running": False, "last_run": None}
 
 
+class ResultsLoadError(RuntimeError):
+    """A machine-readable failure while loading the persisted result artifact."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _ready_status() -> Dict[str, Any]:
+    return {"status": "ready", "code": None, "message": None}
+
+
+def _unavailable_status(error: ResultsLoadError) -> Dict[str, Any]:
+    return {
+        "status": "unavailable",
+        "code": error.code,
+        "message": error.message,
+    }
+
+
+def _refresh_results(application: FastAPI) -> Dict[str, Any]:
+    """Refresh the in-memory snapshot without hiding load failures."""
+    try:
+        results = _load_results()
+    except ResultsLoadError as error:
+        application.state.results = {}
+        application.state.results_status = _unavailable_status(error)
+    else:
+        application.state.results = results
+        application.state.results_status = _ready_status()
+    return application.state.results_status
+
+
 @asynccontextmanager
 async def _lifespan(application: FastAPI):
     application.state.settings = Settings.load()
-    application.state.results = _load_results()
+    _refresh_results(application)
     yield
 
 
@@ -101,26 +135,51 @@ def _require_run_token(
 
 def _load_results() -> Dict[str, Any]:
     if not RESULTS_PATH.exists():
-        return {}
+        raise ResultsLoadError(
+            "results_missing",
+            "Research results are not available. Run `factorlab run` to create results.json.",
+        )
     try:
         with open(RESULTS_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+            results = json.load(f)
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
+        raise ResultsLoadError(
+            "results_invalid",
+            "results.json could not be read as valid JSON. Regenerate the result artifact.",
+        ) from error
+    if not isinstance(results, dict):
+        raise ResultsLoadError(
+            "results_invalid",
+            "results.json must contain a JSON object. Regenerate the result artifact.",
+        )
+    return results
 
 
 def _results() -> Dict[str, Any]:
     if not hasattr(app.state, "results"):
-        app.state.results = _load_results()
+        _refresh_results(app)
     return app.state.results
+
+
+def _results_status() -> Dict[str, Any]:
+    if not hasattr(app.state, "results_status"):
+        _refresh_results(app)
+    return app.state.results_status
+
+
+def _mapping_section(name: str) -> Dict[str, Any]:
+    value = _results().get(name)
+    return value if isinstance(value, dict) else {}
 
 
 @app.get("/api/health")
 def health() -> Dict[str, Any]:
+    status = _results_status()
     return {
-        "status": "ok",
-        "has_results": bool(_results()),
-        "models": list(_results().get("model_nav", {}).keys()),
+        "status": "ok" if status["status"] == "ready" else "degraded",
+        "results": status,
+        "has_results": status["status"] == "ready" and bool(_results()),
+        "models": list(_mapping_section("model_nav")),
     }
 
 
@@ -131,58 +190,63 @@ def get_config() -> Dict[str, Any]:
 
 @app.get("/api/meta")
 def get_meta() -> Dict[str, Any]:
-    return _results().get("meta", {})
+    return _mapping_section("meta")
 
 
 @app.get("/api/results")
-def get_results() -> Dict[str, Any]:
+def get_results() -> Any:
     """返回全部预计算结果（前端一次性拉取）。"""
+    status = _results_status()
+    if status["status"] != "ready":
+        return JSONResponse(status_code=503, content={"error": status})
     return _results()
 
 
 @app.get("/api/models")
 def get_models() -> Dict[str, Any]:
-    res = _results()
     out = {}
-    for name, m in res.get("model_nav", {}).items():
+    for name, m in _mapping_section("model_nav").items():
+        if not isinstance(m, dict):
+            continue
         out[name] = {"perf": m.get("perf", {}), "turnover": m.get("turnover", {})}
     return out
 
 
 @app.get("/api/nav/{model}")
 def get_nav(model: str) -> Dict[str, Any]:
-    m = _results().get("model_nav", {}).get(model)
-    if not m:
+    m = _mapping_section("model_nav").get(model)
+    if not isinstance(m, dict):
         raise HTTPException(status_code=404, detail=f"model {model} not found")
-    return {"model": model, "nav": m["nav"], "perf": m["perf"]}
+    return {"model": model, "nav": m.get("nav", {}), "perf": m.get("perf", {})}
 
 
 @app.get("/api/ic")
 def get_ic() -> Dict[str, Any]:
+    ic_summary = _results().get("ic_summary")
     return {
-        "ic_summary": _results().get("ic_summary", []),
-        "factor_decay": _results().get("factor_decay", {}),
+        "ic_summary": ic_summary if isinstance(ic_summary, list) else [],
+        "factor_decay": _mapping_section("factor_decay"),
     }
 
 
 @app.get("/api/groups")
 def get_groups() -> Dict[str, Any]:
-    return {"group_returns": _results().get("group_returns", {})}
+    return {"group_returns": _mapping_section("group_returns")}
 
 
 @app.get("/api/robustness")
 def get_robustness() -> Dict[str, Any]:
-    return {"robustness": _results().get("robustness", {})}
+    return {"robustness": _mapping_section("robustness")}
 
 
 @app.get("/api/feature-importance")
 def get_feature_importance() -> Dict[str, Any]:
-    return {"feature_importance": _results().get("feature_importance", {})}
+    return {"feature_importance": _mapping_section("feature_importance")}
 
 
 @app.get("/api/cost-scenarios")
 def get_cost_scenarios() -> Dict[str, Any]:
-    return {"cost_scenarios": _results().get("cost_scenarios", {})}
+    return {"cost_scenarios": _mapping_section("cost_scenarios")}
 
 
 @app.get("/api/run/state")
@@ -210,7 +274,9 @@ def _do_run(
             hpo_trials=hpo,
         )
         with _app_lock:
-            app.state.results = _load_results()
+            status = _refresh_results(app)
+            if status["status"] != "ready":
+                raise RuntimeError(status["message"])
             _run_state["running"] = False
             _run_state["last_run"] = str(_do_run.path)
     except Exception as e:  # noqa: BLE001
@@ -245,8 +311,12 @@ def trigger_run(
 @app.post("/api/reload")
 def reload(_: None = Depends(_require_run_token)) -> Dict[str, Any]:
     with _app_lock:
-        app.state.results = _load_results()
-    return {"status": "reloaded", "has_results": bool(app.state.results)}
+        results_status = _refresh_results(app)
+    return {
+        "status": "reloaded" if results_status["status"] == "ready" else "unavailable",
+        "results": results_status,
+        "has_results": results_status["status"] == "ready" and bool(app.state.results),
+    }
 
 
 # ========== 托管前端（若存在） ==========
