@@ -69,6 +69,14 @@ class DeepFactorModel:
         seed: int = 42,
         input_dim: Optional[int] = None,
     ):
+        if not isinstance(epochs, int) or isinstance(epochs, bool) or epochs < 1:
+            raise ValueError("epochs must be a positive integer")
+        if (
+            not isinstance(batch_size, int)
+            or isinstance(batch_size, bool)
+            or batch_size < 2
+        ):
+            raise ValueError("batch_size must be an integer greater than or equal to 2")
         self.hidden_dims = list(hidden_dims)
         self.dropout = dropout
         self.lr = lr
@@ -113,16 +121,24 @@ class DeepFactorModel:
         n = len(feat)
         n_val = max(1, int(0.15 * n))
         idx = torch.randperm(n, generator=rng)
-        val_idx, tr_idx = idx[:n_val].to(DEVICE), idx[n_val:].to(DEVICE)
+        val_pos = idx[:n_val].numpy()
+        tr_pos = idx[n_val:].numpy()
 
-        Xtr = self._to_tensor(feat.iloc[tr_idx.cpu()])
+        Xtr = self._to_tensor(feat.iloc[tr_pos])
         ytr = torch.tensor(
-            (target[tr_idx.cpu()] - self._y_mean) / self._y_std, device=DEVICE
+            (target[tr_pos] - self._y_mean) / self._y_std, device=DEVICE
         )
-        Xval = self._to_tensor(feat.iloc[val_idx.cpu()])
+        Xval = self._to_tensor(feat.iloc[val_pos])
         yval = torch.tensor(
-            (target[val_idx.cpu()] - self._y_mean) / self._y_std, device=DEVICE
+            (target[val_pos] - self._y_mean) / self._y_std, device=DEVICE
         )
+
+        if len(Xtr) < 2:
+            logger.warning(
+                "DeepFactor 训练集样本不足以使用 BatchNorm（%d < 2），跳过",
+                len(Xtr),
+            )
+            return self
 
         self._net = _MLP(len(self.feature_names_), self.hidden_dims, self.dropout).to(
             DEVICE
@@ -142,8 +158,13 @@ class DeepFactorModel:
         for epoch in range(self.epochs):
             self._net.train()
             perm = torch.randperm(len(Xtr), generator=rng).to(DEVICE)
-            for i in range(0, len(Xtr), n_batch):
-                b = perm[i : i + n_batch]
+            batches = list(perm.split(n_batch))
+            # BatchNorm cannot estimate variance from a singleton batch. When
+            # the final remainder is one, fold it into the preceding batch.
+            if len(batches) > 1 and len(batches[-1]) == 1:
+                batches[-2] = torch.cat((batches[-2], batches[-1]))
+                batches.pop()
+            for b in batches:
                 opt.zero_grad()
                 pred = self._net(Xtr[b])
                 loss = loss_fn(pred, ytr[b])

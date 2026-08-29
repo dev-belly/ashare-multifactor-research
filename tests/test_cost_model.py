@@ -40,9 +40,17 @@ def test_cost_is_nonnegative_and_symmetric():
 def test_new_positions_appear_in_cost():
     """权重索引不一致时按并集对齐，新进标的也要计成本。"""
     old = _w(A=1.0)
-    new = _w(A=0.5, B=0.5)
+    new = _w(B=1.0)
     cost = apply_trading_cost(old, new, cost_bps=20.0)
-    assert cost > 0
+    assert cost == 4e-3
+
+
+def test_missing_and_nan_weights_are_filled_with_zero():
+    old = pd.Series({"A": 0.5, "B": float("nan")})
+    new = pd.Series({"B": 0.5, "C": 0.5})
+
+    # Sell A (0.5), buy B (0.5), and buy C (0.5).
+    assert apply_trading_cost(old, new, cost_bps=20.0) == 3e-3
 
 
 def _quotes():

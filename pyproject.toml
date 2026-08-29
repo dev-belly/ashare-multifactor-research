@@ -63,7 +63,7 @@ select = ["E4", "E7", "E9", "F"]
 "tests/*" = ["E402"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "factorlab/backtest/tests"]
 addopts = "-q --strict-markers"
 filterwarnings = [
     "ignore::DeprecationWarning",

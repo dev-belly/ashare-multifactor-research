@@ -18,7 +18,10 @@ def apply_trading_cost(
     例如，从 100% A 换到 100% B 的绝对权重变化之和为 2，会分别对
     卖出 A 和买入 B 收取一次单边成本。
     """
-    delta = (weights_new - weights_old).abs().sum()
+    assets = weights_old.index.union(weights_new.index)
+    old_aligned = weights_old.reindex(assets).fillna(0.0)
+    new_aligned = weights_new.reindex(assets).fillna(0.0)
+    delta = (new_aligned - old_aligned).abs().sum()
     return float(delta * cost_bps * 1e-4)  # 转为小数
 
 
