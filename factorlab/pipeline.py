@@ -13,7 +13,11 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from factorlab.backtest.engine import make_ret_panel, run_long_only_topk
+from factorlab.backtest.engine import (
+    DEFAULT_MAX_WEIGHT,
+    make_ret_panel,
+    run_long_only_topk,
+)
 from factorlab.backtest.oos_split import expanding_window_splits, filter_panel_by_fold
 from factorlab.data.akshare_loader import AkShareLoader
 from factorlab.data.processor import align_to_calendar, basic_clean
@@ -43,6 +47,22 @@ SUPPORTED_MODELS = {
     "cross_section",
 }
 LABEL_HORIZON = 21
+
+
+class OOSScoringError(RuntimeError):
+    """Raised when a requested model has no successful OOS fold."""
+
+    def __init__(self, model_name: str, coverage: dict):
+        self.model_name = model_name
+        self.coverage = coverage
+        failures = ", ".join(
+            f"fold {item['fold_id']}: {item.get('reason', 'unknown')}"
+            for item in coverage["folds"]
+        )
+        super().__init__(
+            f"模型 {model_name} 没有成功的 OOS fold "
+            f"(0/{coverage['requested_fold_count']})；{failures}"
+        )
 
 
 # ========== 通用序列化 ==========
@@ -205,16 +225,50 @@ def run_oos_scores(
     cfg: dict,
     hpo_trials: int = 0,
 ) -> pd.Series:
+    """Generate OOS scores and attach auditable fold/date coverage metadata.
+
+    The returned series stores its coverage dictionary in
+    ``series.attrs['oos_coverage']``. A requested model with zero successful
+    folds raises :class:`OOSScoringError` instead of being silently omitted.
+    """
+    folds = list(folds)
     factor_cols = _cols(panel)
     all_dates = pd.DatetimeIndex(
         panel.index.get_level_values("date").unique()
     ).sort_values()
     scores: List[pd.Series] = []
     deep_params = None
+    fold_records: list[dict] = []
+    expected_oos_dates: set[pd.Timestamp] = set()
+    scored_oos_dates: set[pd.Timestamp] = set()
 
     for fold in folds:
         train, test = filter_panel_by_fold(panel, fold)
-        if train.empty or test.empty:
+        test_dates = pd.DatetimeIndex(
+            test.index.get_level_values("date").unique()
+        ).sort_values()
+        expected_oos_dates.update(pd.Timestamp(date) for date in test_dates)
+        record = {
+            "fold_id": int(fold.fold_id),
+            "status": "failed",
+            "test_start": pd.Timestamp(fold.test_start).strftime("%Y-%m-%d"),
+            "test_end": pd.Timestamp(fold.test_end).strftime("%Y-%m-%d"),
+            "test_end_inclusive": bool(fold.test_end_inclusive),
+            "train_observations": int(len(train)),
+            "training_observations_after_purge": 0,
+            "expected_oos_observations": int(len(test)),
+            "expected_oos_date_count": int(len(test_dates)),
+            "scored_oos_observations": 0,
+            "scored_oos_date_count": 0,
+            "oos_date_coverage_ratio": 0.0,
+        }
+        if train.empty:
+            record["reason"] = "empty_training_fold"
+            fold_records.append(record)
+            continue
+        if test.empty:
+            record["reason"] = "empty_test_fold"
+            fold_records.append(record)
             continue
         train_X = train[factor_cols]
         train_y_full = ret_21d.reindex(train.index)
@@ -229,8 +283,11 @@ def run_oos_scores(
         )
         train_X = train_X.loc[common]
         train_y = train_y_full.loc[common]
+        record["training_observations_after_purge"] = int(len(train_y))
         test_X = test[factor_cols]
         if len(train_y) < 30:
+            record["reason"] = "insufficient_training_labels_after_purge"
+            fold_records.append(record)
             continue
 
         try:
@@ -270,17 +327,90 @@ def run_oos_scores(
                 score = score.rename("score")
         except Exception as e:
             logger.warning("fold %d / %s 失败: %s", fold.fold_id, model_name, e)
+            record["reason"] = "model_exception"
+            record["error"] = f"{type(e).__name__}: {e}"
+            fold_records.append(record)
             continue
 
-        if isinstance(score.index, pd.MultiIndex):
-            score.index.set_names(["date", "code"], inplace=True)
+        if not isinstance(score, pd.Series) or not isinstance(
+            score.index, pd.MultiIndex
+        ):
+            record["reason"] = "invalid_score_index"
+            fold_records.append(record)
+            continue
+        score = (
+            score.rename("score")
+            .reindex(test_X.index)
+            .replace([np.inf, -np.inf], np.nan)
+            .dropna()
+        )
+        score.index.set_names(["date", "code"], inplace=True)
+        if score.empty:
+            record["reason"] = "no_valid_scores"
+            fold_records.append(record)
+            continue
+
+        score_dates = pd.DatetimeIndex(
+            score.index.get_level_values("date").unique()
+        ).sort_values()
+        scored_oos_dates.update(pd.Timestamp(date) for date in score_dates)
+        record.update(
+            {
+                "status": "success",
+                "scored_oos_observations": int(len(score)),
+                "scored_oos_date_count": int(len(score_dates)),
+                "oos_date_coverage_ratio": round(
+                    len(score_dates) / len(test_dates), 6
+                ),
+            }
+        )
+        fold_records.append(record)
         scores.append(score)
 
+    expected_dates = sorted(expected_oos_dates)
+    scored_dates = sorted(scored_oos_dates.intersection(expected_oos_dates))
+    successful_fold_ids = [
+        record["fold_id"] for record in fold_records if record["status"] == "success"
+    ]
+    failed_fold_ids = [
+        record["fold_id"] for record in fold_records if record["status"] == "failed"
+    ]
+    coverage = {
+        "model": model_name,
+        "coverage_unit": "factor_panel_trading_dates",
+        "coverage_denominator": "dates_present_in_configured_oos_test_folds",
+        "requested_fold_count": int(len(folds)),
+        "successful_fold_count": int(len(successful_fold_ids)),
+        "failed_fold_count": int(len(failed_fold_ids)),
+        "successful_fold_ids": successful_fold_ids,
+        "failed_fold_ids": failed_fold_ids,
+        "expected_oos_date_count": int(len(expected_dates)),
+        "scored_oos_date_count": int(len(scored_dates)),
+        "oos_date_coverage_ratio": round(
+            len(scored_dates) / len(expected_dates), 6
+        )
+        if expected_dates
+        else 0.0,
+        "expected_oos_start": expected_dates[0].strftime("%Y-%m-%d")
+        if expected_dates
+        else None,
+        "expected_oos_end": expected_dates[-1].strftime("%Y-%m-%d")
+        if expected_dates
+        else None,
+        "scored_oos_start": scored_dates[0].strftime("%Y-%m-%d")
+        if scored_dates
+        else None,
+        "scored_oos_end": scored_dates[-1].strftime("%Y-%m-%d")
+        if scored_dates
+        else None,
+        "folds": fold_records,
+    }
     if not scores:
-        return pd.Series(dtype=float, name="score")
+        raise OOSScoringError(model_name, coverage)
     out = pd.concat(scores)
     if isinstance(out.index, pd.MultiIndex):
         out.index.set_names(["date", "code"], inplace=True)
+    out.attrs["oos_coverage"] = coverage
     return out
 
 
@@ -305,6 +435,11 @@ def run_pipeline(
         raise ValueError("至少选择一个模型")
     if top_k <= 0 or rebal_freq <= 0 or cost_bps < 0:
         raise ValueError("top_k/rebal_freq 必须为正数，cost_bps 不能为负")
+    if top_k * DEFAULT_MAX_WEIGHT < 1.0 - 1e-12:
+        raise ValueError(
+            f"top_k 至少为 {int(1 / DEFAULT_MAX_WEIGHT)}，才能在单股 "
+            f"{DEFAULT_MAX_WEIGHT:.0%} 上限下保持满仓；不会静默保留现金"
+        )
 
     deep_cfg = cfg["models"].get("deep", {})
     if hpo_trials is None:
@@ -378,11 +513,20 @@ def run_pipeline(
 
     # 5) 模型分数 + 回测
     final_scores: Dict[str, pd.Series] = {}
+    model_oos_coverage: Dict[str, dict] = {}
     for m in model_list:
         s = run_oos_scores(panel, ret_21d, folds, m, cfg, hpo_trials=hpo_trials)
         if s.empty:
-            logger.warning("模型 %s 无可用分数", m)
-            continue
+            raise RuntimeError(f"模型 {m} 返回空分数但未报告 fold 失败")
+        model_oos_coverage[m] = s.attrs["oos_coverage"]
+        if model_oos_coverage[m]["failed_fold_count"]:
+            logger.warning(
+                "模型 %s 仅成功 %d/%d 个 fold，OOS 日期覆盖率 %.1f%%",
+                m,
+                model_oos_coverage[m]["successful_fold_count"],
+                model_oos_coverage[m]["requested_fold_count"],
+                100 * model_oos_coverage[m]["oos_date_coverage_ratio"],
+            )
         final_scores[m] = s.dropna()
 
     bt_results: Dict[str, dict] = {}
@@ -397,6 +541,23 @@ def run_pipeline(
             top_k=top_k,
             rebalance_freq=rebal_freq,
             cost_bps=cost_bps,
+            max_weight=DEFAULT_MAX_WEIGHT,
+        )
+        model_oos_coverage[m].update(
+            {
+                "backtest_return_start": bt.nav.index.min().strftime("%Y-%m-%d"),
+                "backtest_return_end": bt.nav.index.max().strftime("%Y-%m-%d"),
+                "backtest_scope": (
+                    "return_calendar_from_first_score_through_available_end; "
+                    "signals_stop_at_last_valid_score"
+                ),
+                "post_last_score_return_date_count": int(
+                    (
+                        bt.nav.index
+                        > pd.Timestamp(model_oos_coverage[m]["scored_oos_end"])
+                    ).sum()
+                ),
+            }
         )
         if reference_dates is None:
             reference_dates = bt.nav.index
@@ -412,6 +573,7 @@ def run_pipeline(
                 top_k=top_k,
                 rebalance_freq=rebal_freq,
                 cost_bps=c,
+                max_weight=DEFAULT_MAX_WEIGHT,
             )
             cost_scenarios[c][m] = perf_stats(btc.nav)
         logger.info(
@@ -549,10 +711,13 @@ def run_pipeline(
         "models": successful_models,
         "requested_models": model_list,
         "top_k": top_k,
+        "max_weight_per_stock": DEFAULT_MAX_WEIGHT,
+        "portfolio_cash_policy": "fully_invested_or_error",
         "rebal_freq": rebal_freq,
         "cost_bps": cost_bps,
         "cost_scenarios_bps": [float(c) for c in cost_scenarios.keys()],
         "n_folds": len(folds),
+        "model_oos_coverage": model_oos_coverage,
         "label_horizon_days": LABEL_HORIZON,
         "execution_lag_days": 1,
         "diagnostic_scope": "oos_test_dates",

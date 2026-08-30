@@ -201,3 +201,59 @@ def test_missing_score_cross_section_does_not_force_liquidation() -> None:
     assert result.positions.loc[dates[2], "A"] == pytest.approx(1.0)
     assert result.daily_ret.loc[dates[2]] == pytest.approx(0.10)
     assert result.turnover.loc[dates[2]] == 0.0
+
+
+def test_held_position_keeps_tail_returns_after_last_valid_score() -> None:
+    dates = pd.bdate_range("2024-01-02", periods=6, name="date")
+    score_dates = dates[:2]
+    scores = _panel(
+        pd.DataFrame(
+            {"A": [10.0, 0.0], "B": [0.0, 10.0]},
+            index=score_dates,
+        ),
+        "score",
+    )
+    returns = _panel(
+        pd.DataFrame(
+            {
+                "A": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                "B": [0.0, 0.0, 0.0, 0.10, 0.20, 0.30],
+            },
+            index=dates,
+        ),
+        "ret_1d",
+    )
+
+    result = run_long_only_topk(
+        scores,
+        returns,
+        top_k=1,
+        rebalance_freq=1,
+        min_holding_days=1,
+        max_weight=1.0,
+        cost_bps=0.0,
+    )
+
+    # Both legitimate signals execute one close later. The return calendar then
+    # continues through its own end, while no extra tail rebalance is invented.
+    assert_index_equal(result.nav.index, dates)
+    assert_index_equal(result.rebalance_dates, dates[[1, 2]])
+    assert (result.turnover.loc[dates[3]:] == 0.0).all()
+    assert (result.positions.loc[dates[3]:, "B"] == 1.0).all()
+    assert_series_equal(
+        result.daily_ret,
+        pd.Series([0.0, 0.0, 0.0, 0.10, 0.20, 0.30], index=dates),
+    )
+
+
+def test_infeasible_weight_cap_fails_instead_of_hiding_cash() -> None:
+    scores, returns, _ = _deterministic_inputs()
+
+    with pytest.raises(ValueError, match="无法组成满仓组合"):
+        run_long_only_topk(
+            scores,
+            returns,
+            top_k=10,
+            max_weight=0.05,
+            cost_bps=0.0,
+        )

@@ -73,7 +73,7 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| `meta` | 数据来源、覆盖率、日期、模型、fold、标签与执行参数 |
+| `meta` | 数据来源、覆盖率、日期、模型、fold、标签与执行参数；`model_oos_coverage` 逐模型记录 fold 成败、打分日期覆盖率和实际回测收益区间 |
 | `model_nav` | `benchmark` 与成功模型的净值、绩效和换手 |
 | `cost_scenarios` | 各策略在不同单边 bps 下的绩效 |
 | `ic_summary` | 因子 Pearson/Spearman IC 摘要 |
@@ -83,3 +83,5 @@
 | `feature_importance` | 可用时的模型特征重要性 |
 
 不可表示的非有限浮点数会序列化为 JSON `null`，不会输出非标准 `NaN` 或 `Infinity`。
+
+组合约束通过 `meta.max_weight_per_stock` 与 `meta.portfolio_cash_policy` 披露。当前固定为单股 5% 上限和 `fully_invested_or_error`：若 Top-K 或某次有效候选数不足 20，运行会失败，而不是静默持有现金。

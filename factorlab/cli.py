@@ -31,7 +31,12 @@ def run(
     models: str = typer.Option(
         "eq_weight,elastic_net,lightgbm,deep", "--models", "-m", help="逗号分隔的模型"
     ),
-    top_k: int = typer.Option(20, "--top-k", help="持仓数量"),
+    top_k: int = typer.Option(
+        20,
+        "--top-k",
+        min=20,
+        help="持仓数量（单股 5% 上限下至少 20，只允许可满仓组合）",
+    ),
     rebal_freq: int = typer.Option(21, "--rebal-freq", help="调仓频率（交易日）"),
     cost_bps: float = typer.Option(20.0, "--cost-bps", help="单边交易成本（基点）"),
     data_source: str | None = typer.Option(

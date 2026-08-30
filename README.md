@@ -34,6 +34,9 @@ AkShare support is deliberately strict. Calendar, universe, quote and industry c
 - Per-symbol next-day returns and 21-trading-day labels without cross-symbol shifts.
 - Purging of the final 21 training dates before each OOS fold.
 - Execution at the next trading day's close, with returns accruing only afterward, and natural holding-weight drift.
+- Signals stop after the final valid score date while existing holdings continue through the available return calendar.
+- A fully invested book under the 5% per-name cap; fewer than 20 requested or available names fails explicitly instead of hiding cash exposure.
+- Per-model OOS fold outcomes and scored-date coverage in output metadata; zero successful folds fail explicitly.
 - Costs charged on actual traded weight using a single-side bps rate.
 - A frictionless daily equal-weight universe benchmark beside strategy results.
 - Standards-compliant JSON and tested report rendering.

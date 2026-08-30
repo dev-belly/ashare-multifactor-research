@@ -11,6 +11,8 @@ from factorlab.utils.common import get_logger
 
 logger = get_logger(__name__)
 
+DEFAULT_MAX_WEIGHT = 0.05
+
 
 @dataclass
 class BacktestResult:
@@ -32,12 +34,13 @@ def run_long_only_topk(
     rebalance_freq: int = 21,  # 调仓频率（交易日）
     cost_bps: float = 20.0,
     min_holding_days: int = 21,
-    max_weight: float = 0.05,  # 个股权重上限（防过度集中）
+    max_weight: float = DEFAULT_MAX_WEIGHT,  # 个股权重上限（防过度集中）
 ) -> BacktestResult:
     """多头 TopK 等权回测。
 
     关键：
-        - 信号日：选 score 最高的 top_k，等权（受 max_weight 上限）
+        - 信号日：选 score 最高的 top_k，等权且保持满仓
+        - 如果可选股票数不足以在 max_weight 约束下满仓，则明确失败
         - 信号生成后的下一交易日收盘执行换仓，随后才让目标权重承担收益
         - 调仓周期间：持仓不变，按个股 daily return 滚动
         - 实际换仓生效日：扣除买卖双边成本
@@ -49,32 +52,47 @@ def run_long_only_topk(
         rebalance_freq: 调仓频率（交易日）。
         cost_bps: 单边成本（基点）。
         min_holding_days: 最短持有期。
-        max_weight: 单股权重上限。
+        max_weight: 单股权重上限；不会通过保留未披露现金来满足约束。
 
     Returns:
         BacktestResult。
     """
+    if top_k <= 0 or rebalance_freq <= 0 or min_holding_days < 0:
+        raise ValueError("top_k/rebalance_freq 必须为正数，min_holding_days 不能为负")
+    if not 0 < max_weight <= 1:
+        raise ValueError("max_weight 必须在 (0, 1] 区间")
+    if top_k * max_weight < 1.0 - 1e-12:
+        min_top_k = int(1.0 / max_weight + 1.0 - 1e-12)
+        raise ValueError(
+            "top_k 与 max_weight 无法组成满仓组合："
+            f"top_k={top_k}, max_weight={max_weight:.6g}；"
+            f"至少需要 {min_top_k} 只股票"
+        )
+
     # 把面板 unstack 成宽表便于按行处理
     score_w = score_panel["score"].unstack("code")
     ret_w = returns_panel["ret_1d"].unstack("code")
     if score_w.empty or ret_w.empty:
         raise ValueError("score_panel 和 returns_panel 都必须包含数据")
-    # 回测日历以实际收益面板为准。只按 score 的精确 (date, code) 交集
-    # 截取收益会让“当日没有分数但仍在持仓”的股票收益被错误填成 0。
-    start = max(score_w.index.min(), ret_w.index.min())
-    end = min(score_w.index.max(), ret_w.index.max())
-    common_idx = ret_w.index[
-        (ret_w.index >= start) & (ret_w.index <= end)
-    ].sort_values()
-    if common_idx.empty:
-        raise ValueError("score_panel 与 returns_panel 没有重叠日期")
+    # 回测日历以实际收益面板为准，并从首个可交易 score 日期延伸到收益
+    # 面板末尾。若在最后一个 score 日期截断，会漏掉已经建立的持仓在
+    # 随后交易日真实发生的收益。信号日历则只延伸到最后一个有效 score，
+    # 避免在尾部收益期生成没有研究分数支持的伪信号。
+    valid_score_dates = score_w.index[score_w.notna().any(axis=1)]
+    overlapping_score_dates = valid_score_dates.intersection(ret_w.index)
+    if overlapping_score_dates.empty:
+        raise ValueError("score_panel 与 returns_panel 没有含有效分数的重叠日期")
+    start = overlapping_score_dates.min()
+    last_valid_score_date = overlapping_score_dates.max()
+    common_idx = ret_w.index[ret_w.index >= start].sort_values()
     score_w = score_w.reindex(common_idx)
     ret_w = ret_w.reindex(index=common_idx, columns=score_w.columns)
     # 停牌或缺失行情按当日收益 0 处理
     ret_w = ret_w.fillna(0.0)
 
     # 这些日期只生成目标权重；真正换仓在各自的下一交易日收盘执行。
-    signal_dates = common_idx[::rebalance_freq]
+    signal_calendar = common_idx[common_idx <= last_valid_score_date]
+    signal_dates = signal_calendar[::rebalance_freq]
     signal_set = set(signal_dates)
 
     # 持仓表（= 0 / 1/N）
@@ -137,12 +155,14 @@ def run_long_only_topk(
                 picks = row.nlargest(top_k).index
             else:
                 picks = row.index
+            if len(picks) * max_weight < 1.0 - 1e-12:
+                raise ValueError(
+                    f"{dt:%Y-%m-%d} 仅有 {len(picks)} 只有效候选，"
+                    f"在 max_weight={max_weight:.6g} 下无法满仓"
+                )
             new_w = pd.Series(0.0, index=score_w.columns)
-            w = min(1.0 / len(picks), max_weight) if len(picks) else 0.0
+            w = 1.0 / len(picks)
             new_w.loc[picks] = w
-            # 若超过 1，截断
-            if new_w.sum() > 1:
-                new_w = new_w / new_w.sum()
             pending_weights = new_w
 
     # 构造净值

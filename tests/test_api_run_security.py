@@ -64,7 +64,7 @@ def test_remote_run_accepts_validated_json_with_the_server_token(monkeypatch) ->
             headers={"X-FactorLab-Run-Token": "server-secret"},
             json={
                 "models": "eq_weight",
-                "top_k": 7,
+                "top_k": 25,
                 "rebal_freq": 5,
                 "cost_bps": 12.5,
                 "data_source": "synthetic",
@@ -76,7 +76,7 @@ def test_remote_run_accepts_validated_json_with_the_server_token(monkeypatch) ->
     assert response.json()["status"] == "started"
     assert captured == {
         "models": "eq_weight",
-        "top_k": 7,
+        "top_k": 25,
         "rebal_freq": 5,
         "cost_bps": 12.5,
         "data_source": "synthetic",
@@ -93,6 +93,21 @@ def test_remote_run_rejects_unknown_models_before_starting(monkeypatch) -> None:
             "/api/run",
             headers={"X-FactorLab-Run-Token": "server-secret"},
             json={"models": "eq_weight,not_a_model"},
+        )
+
+    assert response.status_code == 422
+    assert main._run_state["running"] is False
+
+
+def test_remote_run_rejects_top_k_incompatible_with_weight_cap(monkeypatch) -> None:
+    monkeypatch.setenv("FACTORLAB_RUN_TOKEN", "server-secret")
+    main._run_state["running"] = False
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/api/run",
+            headers={"X-FactorLab-Run-Token": "server-secret"},
+            json={"models": "eq_weight", "top_k": 19},
         )
 
     assert response.status_code == 422

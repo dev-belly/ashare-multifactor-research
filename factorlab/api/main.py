@@ -91,7 +91,9 @@ class RunRequest(BaseModel):
         max_length=128,
         pattern=r"^[a-z0-9_,]+$",
     )
-    top_k: int = Field(default=20, ge=1, le=500)
+    # The backtest has a fixed 5% per-name cap and does not hide residual cash.
+    # At least 20 names are therefore required for a feasible fully invested book.
+    top_k: int = Field(default=20, ge=20, le=500)
     rebal_freq: int = Field(default=21, ge=1, le=252)
     cost_bps: float = Field(default=20.0, ge=0.0, le=1_000.0)
     data_source: Optional[str] = Field(default=None, pattern=r"^(synthetic|akshare)$")
