@@ -33,7 +33,7 @@ def run_long_only_topk(
     top_k: int = 50,
     rebalance_freq: int = 21,  # 调仓频率（交易日）
     cost_bps: float = 20.0,
-    min_holding_days: int = 21,
+    min_holding_days: int | None = None,
     max_weight: float = DEFAULT_MAX_WEIGHT,  # 个股权重上限（防过度集中）
 ) -> BacktestResult:
     """多头 TopK 等权回测。
@@ -51,12 +51,14 @@ def run_long_only_topk(
         top_k: 持仓数。
         rebalance_freq: 调仓频率（交易日）。
         cost_bps: 单边成本（基点）。
-        min_holding_days: 最短持有期。
+        min_holding_days: 最短持有期；默认与调仓频率相同，可显式覆盖。
         max_weight: 单股权重上限；不会通过保留未披露现金来满足约束。
 
     Returns:
         BacktestResult。
     """
+    if min_holding_days is None:
+        min_holding_days = rebalance_freq
     if top_k <= 0 or rebalance_freq <= 0 or min_holding_days < 0:
         raise ValueError("top_k/rebalance_freq 必须为正数，min_holding_days 不能为负")
     if not 0 < max_weight <= 1:

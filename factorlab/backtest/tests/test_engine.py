@@ -99,6 +99,35 @@ def test_cost_is_charged_on_weight_effective_date() -> None:
     assert_index_equal(result.rebalance_dates, dates[[1, 3]])
 
 
+def test_requested_short_rebalance_frequency_is_not_overridden_by_default_holding_period() -> None:
+    dates = pd.bdate_range("2024-01-02", periods=12, name="date")
+    scores = _panel(
+        pd.DataFrame(
+            {
+                "A": [10.0] * 5 + [0.0] * 7,
+                "B": [0.0] * 5 + [10.0] * 7,
+            },
+            index=dates,
+        ),
+        "score",
+    )
+    zero_returns = _panel(
+        pd.DataFrame(0.0, index=dates, columns=["A", "B"]), "ret_1d"
+    )
+
+    result = run_long_only_topk(
+        scores,
+        zero_returns,
+        top_k=1,
+        rebalance_freq=5,
+        max_weight=1.0,
+        cost_bps=0.0,
+    )
+
+    assert_index_equal(result.rebalance_dates, dates[[1, 6, 11]])
+    assert result.positions.loc[dates[7], "B"] == 1.0
+
+
 def test_make_ret_panel_forward_horizon_stays_within_each_code() -> None:
     dates = pd.bdate_range("2024-01-02", periods=4, name="date")
     quotes = {
