@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from factorlab.backtest.cost_model import apply_trading_cost, is_tradable_today
 
@@ -35,6 +36,16 @@ def test_cost_is_nonnegative_and_symmetric():
     new = _w(A=0.6, B=0.4)
     assert apply_trading_cost(old, new) >= 0
     assert abs(apply_trading_cost(old, new) - apply_trading_cost(new, old)) < 1e-15
+
+
+@pytest.mark.parametrize("cost_bps", [-1.0, float("nan"), float("inf"), -float("inf")])
+def test_invalid_cost_rate_fails_instead_of_crediting_or_poisoning_nav(cost_bps):
+    with pytest.raises(ValueError, match="cost_bps"):
+        apply_trading_cost(_w(A=1.0), _w(B=1.0), cost_bps=cost_bps)
+
+
+def test_finite_fee_result_does_not_overflow_before_bps_conversion():
+    assert apply_trading_cost(_w(A=1.0), _w(B=1.0), cost_bps=1e308) == pytest.approx(2e304)
 
 
 def test_new_positions_appear_in_cost():

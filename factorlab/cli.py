@@ -49,7 +49,7 @@ def run(
     """运行端到端流水线（数据→因子→模型→回测→评估）并写出 results.json。"""
     from factorlab.pipeline import run_pipeline
 
-    rprint("[bold green]▶ FactorLab 流水线启动[/bold green]")
+    rprint("[bold green]FactorLab 流水线启动[/bold green]")
     out = run_pipeline(
         config_path=config,
         models=models,
@@ -59,7 +59,7 @@ def run(
         data_source=data_source,
         hpo_trials=hpo,
     )
-    rprint(f"[bold green]✔ 结果已写出：{out}[/bold green]")
+    rprint(f"[bold green]结果已写出：{out}[/bold green]")
 
 
 @app.command()
@@ -71,7 +71,7 @@ def serve(
     """启动 FastAPI 服务。"""
     import uvicorn
 
-    rprint(f"[bold green]▶ FactorLab API 启动于 http://{host}:{port}[/bold green]")
+    rprint(f"[bold green]FactorLab API 启动于 http://{host}:{port}[/bold green]")
     uvicorn.run("factorlab.api.main:app", host=host, port=port, reload=reload)
 
 
@@ -91,9 +91,9 @@ def report(
     """根据 results.json 生成研究数据内联的单文件 HTML 报告。"""
     from factorlab.report import build_report_from_config
 
-    rprint("[bold green]▶ 生成量化研究报告[/bold green]")
+    rprint("[bold green]生成量化研究报告[/bold green]")
     path = build_report_from_config(out_path=out)
-    rprint(f"[bold green]✔ 报告已生成：{path}[/bold green]")
+    rprint(f"[bold green]报告已生成：{path}[/bold green]")
 
 
 @app.command()

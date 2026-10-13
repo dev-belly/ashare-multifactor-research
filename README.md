@@ -120,6 +120,8 @@ Authorized clients send `X-FactorLab-Run-Token`. Never embed the token in fronte
 
 ## Verification
 
+The React/Vite dashboard uses Tailwind CSS 4 and requires Chrome 111+, Safari 16.4+, or Firefox 128+. Node.js 24 is the tested and recommended build environment; the existing theme is loaded explicitly through `@config` and the dedicated `@tailwindcss/postcss` plugin.
+
 ```bash
 uv sync --frozen --group dev
 uv run ruff check --select E4,E7,E9,F factorlab tests
@@ -129,6 +131,8 @@ uv run mkdocs build --strict
 cd frontend
 npm ci --no-audit --no-fund
 npm run build
+npm audit --registry=https://registry.npmjs.org
+npm audit --omit=dev --registry=https://registry.npmjs.org
 ```
 
 Synthetic returns can look strong because the simulator contains market and stock drift. Treat the benchmark, IC diagnostics, data-source metadata, and execution assumptions as part of the result. A high synthetic Sharpe is not evidence of real-world alpha.

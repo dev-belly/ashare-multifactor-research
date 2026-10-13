@@ -741,7 +741,7 @@ def run_pipeline(
     out_path = result_dir / "results.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2, allow_nan=False)
-    logger.info("✔ 结果已写出：%s", out_path)
+    logger.info("结果已写出：%s", out_path)
     return out_path
 
 

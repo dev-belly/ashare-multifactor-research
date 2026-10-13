@@ -120,6 +120,8 @@ uv run factorlab serve
 
 ## 验证命令
 
+React/Vite 仪表盘使用 Tailwind CSS 4，浏览器需 Chrome 111+、Safari 16.4+ 或 Firefox 128+。Node.js 24 是受测并推荐的构建环境。现有主题通过 `@config` 显式加载，并使用专用 `@tailwindcss/postcss` 插件。
+
 ```bash
 uv sync --frozen --group dev
 uv run ruff check --select E4,E7,E9,F factorlab tests
@@ -129,6 +131,8 @@ uv run mkdocs build --strict
 cd frontend
 npm ci --no-audit --no-fund
 npm run build
+npm audit --registry=https://registry.npmjs.org
+npm audit --omit=dev --registry=https://registry.npmjs.org
 ```
 
 合成数据生成器含市场和个股漂移，因此回测可能很好看。应同时看无成本基准、IC、数据来源和交易假设；合成数据高 Sharpe 不等于真实 Alpha。

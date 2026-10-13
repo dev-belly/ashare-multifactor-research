@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
-from factorlab.backtest.cost_model import apply_trading_cost
+from factorlab.backtest.cost_model import apply_trading_cost, validate_cost_bps
 from factorlab.utils.common import get_logger
 
 logger = get_logger(__name__)
@@ -59,6 +60,7 @@ def run_long_only_topk(
     """
     if min_holding_days is None:
         min_holding_days = rebalance_freq
+    validate_cost_bps(cost_bps)
     if top_k <= 0 or rebalance_freq <= 0 or min_holding_days < 0:
         raise ValueError("top_k/rebalance_freq 必须为正数，min_holding_days 不能为负")
     if not 0 < max_weight <= 1:
@@ -74,6 +76,10 @@ def run_long_only_topk(
     # 把面板 unstack 成宽表便于按行处理
     score_w = score_panel["score"].unstack("code")
     ret_w = returns_panel["ret_1d"].unstack("code")
+    if score_w.isin([float("inf"), -float("inf")]).any().any():
+        raise ValueError("score must be finite or missing")
+    if ((ret_w < -1.0) | ret_w.isin([float("inf"), -float("inf")])).any().any():
+        raise ValueError("ret_1d must be finite or missing and cannot be below -100%")
     if score_w.empty or ret_w.empty:
         raise ValueError("score_panel 和 returns_panel 都必须包含数据")
     # 回测日历以实际收益面板为准，并从首个可交易 score 日期延伸到收益
@@ -117,8 +123,8 @@ def run_long_only_topk(
         # 先把旧持仓漂移到今日收盘，再在收盘执行昨日信号。这样换手是
         # 相对实际成交前权重计算的，也不会误吃 T close → T+1 close 收益。
         gross_value = 1.0 + gross_return
-        if gross_value <= 0:
-            raise RuntimeError("组合单日总价值非正，无法更新漂移权重")
+        if not np.isfinite(gross_value) or gross_value <= 0:
+            raise RuntimeError("组合单日总价值非正或非有限，无法更新漂移权重")
         active_weights = active_weights.mul(1.0 + asset_returns).div(gross_value)
 
         trade_cost = 0.0
@@ -129,6 +135,8 @@ def run_long_only_topk(
                 pending_weights,
                 cost_bps=cost_bps,
             )
+            if not np.isfinite(trade_cost) or trade_cost >= gross_value:
+                raise ValueError("transaction cost must be finite and smaller than portfolio value")
             active_weights = pending_weights
             pending_weights = None
             last_rebalance_idx = i
@@ -168,7 +176,10 @@ def run_long_only_topk(
             pending_weights = new_w
 
     # 构造净值
-    nav = (1 + daily_ret).cumprod()
+    with np.errstate(over="ignore", invalid="ignore"):
+        nav = (1 + daily_ret).cumprod()
+    if not np.isfinite(nav).all() or (nav < 0).any():
+        raise RuntimeError("NAV must remain finite and non-negative")
     n_stocks_avg = (positions > 0).sum(axis=1).mean()
 
     return BacktestResult(

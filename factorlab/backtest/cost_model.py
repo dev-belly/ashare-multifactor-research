@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
+import math
+
 import pandas as pd
+
+
+def validate_cost_bps(cost_bps: float) -> None:
+    """Validate the finite, non-negative fee rate used by the backtest."""
+    try:
+        valid = math.isfinite(cost_bps) and cost_bps >= 0
+    except (TypeError, OverflowError):
+        valid = False
+    if not valid:
+        raise ValueError("cost_bps must be finite and non-negative")
 
 
 def apply_trading_cost(
@@ -18,11 +30,12 @@ def apply_trading_cost(
     例如，从 100% A 换到 100% B 的绝对权重变化之和为 2，会分别对
     卖出 A 和买入 B 收取一次单边成本。
     """
+    validate_cost_bps(cost_bps)
     assets = weights_old.index.union(weights_new.index)
     old_aligned = weights_old.reindex(assets).fillna(0.0)
     new_aligned = weights_new.reindex(assets).fillna(0.0)
     delta = (new_aligned - old_aligned).abs().sum()
-    return float(delta * cost_bps * 1e-4)  # 转为小数
+    return float(delta * (cost_bps * 1e-4))  # 先转为小数，避免中间乘积溢出
 
 
 def is_tradable_today(
