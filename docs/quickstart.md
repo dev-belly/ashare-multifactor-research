@@ -2,7 +2,7 @@
 
 ## 1. 安装
 
-需要 Python 3.11+、[uv](https://docs.astral.sh/uv/)；构建 React 前端还需要 Node.js 24+。
+需要 Python 3.11+、[uv](https://docs.astral.sh/uv/)；React 前端的受测构建环境为 Node.js 24，推荐使用同一版本。
 
 ```bash
 git clone https://github.com/dev-belly/ashare-multifactor-research.git
@@ -57,6 +57,8 @@ uv run factorlab serve
 
 ## 4. 前端开发
 
+React/Vite 仪表盘采用 Tailwind CSS 4，需使用 Chrome 111+、Safari 16.4+ 或 Firefox 128+。自定义主题通过 `@config` 显式加载；CSS 由专用 `@tailwindcss/postcss` 插件构建，不再使用旧版 Tailwind PostCSS 插件。
+
 ```bash
 cd frontend
 npm ci --no-audit --no-fund
@@ -104,6 +106,8 @@ uv run mkdocs build --strict
 cd frontend
 npm ci --no-audit --no-fund
 npm run build
+npm audit --registry=https://registry.npmjs.org
+npm audit --omit=dev --registry=https://registry.npmjs.org
 ```
 
 !!! warning "免责声明"

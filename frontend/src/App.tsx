@@ -32,7 +32,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 function PerfTable({ results }: { results: Results }) {
   const rows = Object.entries(results.model_nav || {}).map(([name, m]) => ({ name, perf: m?.perf || {} }));
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="text-slate-400 bg-ink-700/50">
           <tr>
@@ -100,6 +100,7 @@ function NavChart({ results }: { results: Results }) {
       splitLine: { lineStyle: { color: "#1a2233" } },
       axisLabel: { color: "#7e93ad" },
     },
+    media: [{ query: { maxWidth: 480 }, option: { grid: { top: 72 } } }, { option: { grid: { top: 40 } } }],
     series,
   };
   return <ReactECharts option={option} style={{ height: 380 }} notMerge />;
@@ -116,11 +117,11 @@ function IcHeatmap({ ic }: { ic: IcRow[] }) {
   ]);
   const option: any = {
     backgroundColor: "transparent",
-    grid: { left: 90, right: 20, top: 20, bottom: 40 },
+    grid: { left: 90, right: 20, top: 20, bottom: 80 },
     tooltip: { position: "top", backgroundColor: "#0f1623", borderColor: "#2a3650", textStyle: { color: "#e5edf7" } },
     xAxis: { type: "category", data: methods, axisLabel: { color: "#9fb3cc" }, axisLine: { lineStyle: { color: "#2a3650" } } },
     yAxis: { type: "category", data: factors, axisLabel: { color: "#9fb3cc" }, axisLine: { lineStyle: { color: "#2a3650" } } },
-    visualMap: { min: -1, max: 1, calculable: true, orient: "horizontal", left: "center", bottom: 0, inRange: { color: ["#22c55e", "#0f1623", "#ef4444"] }, textStyle: { color: "#9fb3cc" } },
+    visualMap: { min: -1, max: 1, calculable: true, orient: "horizontal", left: "center", bottom: 8, inRange: { color: ["#22c55e", "#0f1623", "#ef4444"] }, textStyle: { color: "#9fb3cc" } },
     series: [{ type: "heatmap", data, label: { show: true, color: "#e5edf7", fontSize: 10 }, emphasis: { itemStyle: { borderColor: "#fff", borderWidth: 1 } } }],
   };
   return <ReactECharts option={option} style={{ height: 460 }} notMerge />;
@@ -173,6 +174,7 @@ function GroupChart({ group }: { group: any }) {
     legend: { textStyle: { color: "#9fb3cc" }, top: 0 },
     xAxis: { type: "time", axisLabel: { color: "#7e93ad" }, axisLine: { lineStyle: { color: "#2a3650" } } },
     yAxis: { type: "value", name: "净值", axisLabel: { color: "#7e93ad" }, splitLine: { lineStyle: { color: "#1a2233" } } },
+    media: [{ query: { maxWidth: 480 }, option: { grid: { top: 72 } } }, { option: { grid: { top: 40 } } }],
     series,
   };
   return <ReactECharts option={option} style={{ height: 360 }} notMerge />;
@@ -181,7 +183,7 @@ function GroupChart({ group }: { group: any }) {
 function RobustTable({ results }: { results: Results }) {
   const models = Object.keys(results.robustness || {});
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="text-slate-400 bg-ink-700/50">
           <tr>
@@ -234,6 +236,7 @@ function CostChart({ results }: { results: Results }) {
     legend: { textStyle: { color: "#9fb3cc" }, top: 0 },
     xAxis: { type: "category", data: costs.map((c) => `${c}bps`), name: "单边成本", axisLabel: { color: "#7e93ad" }, axisLine: { lineStyle: { color: "#2a3650" } } },
     yAxis: { type: "value", name: "年化收益", axisLabel: { color: "#7e93ad", formatter: (v: number) => `${(v * 100).toFixed(0)}%` }, splitLine: { lineStyle: { color: "#1a2233" } } },
+    media: [{ query: { maxWidth: 480 }, option: { grid: { top: 72 } } }, { option: { grid: { top: 40 } } }],
     series,
   };
   return <ReactECharts option={option} style={{ height: 320 }} notMerge />;
@@ -299,10 +302,10 @@ export default function App() {
 
   return (
     <div className="min-h-full flex flex-col">
-      <header className="sticky top-0 z-10 border-b border-ink-600/60 bg-ink-900/80 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-ink-600/60 bg-ink-900/80 backdrop-blur-sm">
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center font-bold text-white">F</div>
+            <div className="w-9 h-9 rounded-lg bg-linear-to-br from-accent to-purple-500 flex items-center justify-center font-bold text-white">F</div>
             <div>
               <div className="text-lg font-semibold tracking-tight">FactorLab</div>
               <div className="text-xs text-slate-400">A股多因子研究 · 样本外回测 · 深度学习因子</div>
@@ -376,7 +379,7 @@ export default function App() {
                 <select
                   value={decayFactor}
                   onChange={(e) => setDecayFactor(e.target.value)}
-                  className="bg-ink-700 border border-ink-500 rounded px-2 py-1 text-sm"
+                  className="bg-ink-700 border border-ink-500 rounded-sm px-2 py-1 text-sm"
                 >
                   {decayFactors.map((f) => (
                     <option key={f} value={f}>{f}</option>
@@ -396,7 +399,7 @@ export default function App() {
                 <select
                   value={groupFactor}
                   onChange={(e) => setGroupFactor(e.target.value)}
-                  className="bg-ink-700 border border-ink-500 rounded px-2 py-1 text-sm"
+                  className="bg-ink-700 border border-ink-500 rounded-sm px-2 py-1 text-sm"
                 >
                   {groupFactors.map((f) => (
                     <option key={f} value={f}>{f}</option>

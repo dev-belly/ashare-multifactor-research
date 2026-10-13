@@ -286,3 +286,87 @@ def test_infeasible_weight_cap_fails_instead_of_hiding_cash() -> None:
             max_weight=0.05,
             cost_bps=0.0,
         )
+
+
+@pytest.mark.parametrize("cost_bps", [-1.0, float("nan"), float("inf")])
+def test_invalid_cost_rate_is_rejected_even_when_no_order_can_execute(cost_bps) -> None:
+    scores, returns, _ = _deterministic_inputs()
+    with pytest.raises(ValueError, match="cost_bps"):
+        run_long_only_topk(
+            scores.iloc[:2], returns.iloc[:2], top_k=2, max_weight=0.5, cost_bps=cost_bps
+        )
+
+
+@pytest.mark.parametrize("asset_return", [-2.0, float("inf"), -float("inf")])
+def test_invalid_asset_returns_cannot_create_short_positions(asset_return) -> None:
+    scores, returns, dates = _deterministic_inputs()
+    returns.loc[(dates[2], "A"), "ret_1d"] = asset_return
+    with pytest.raises(ValueError, match="ret_1d"):
+        run_long_only_topk(scores, returns, top_k=2, max_weight=0.5, cost_bps=0)
+
+
+@pytest.mark.parametrize("score", [float("inf"), -float("inf")])
+def test_infinite_scores_are_not_valid_selection_signals(score) -> None:
+    scores, returns, dates = _deterministic_inputs()
+    scores.loc[(dates[0], "A"), "score"] = score
+    with pytest.raises(ValueError, match="score"):
+        run_long_only_topk(scores, returns, top_k=2, max_weight=0.5, cost_bps=0)
+
+
+def test_total_loss_and_missing_returns_keep_valid_long_only_weights() -> None:
+    scores, returns, dates = _deterministic_inputs()
+    returns["ret_1d"] = 0.0
+    returns.loc[(dates[2], "A"), "ret_1d"] = -1.0
+    returns.loc[(dates[2], "B"), "ret_1d"] = float("nan")
+    result = run_long_only_topk(
+        scores, returns, top_k=2, rebalance_freq=10, max_weight=0.5, cost_bps=0
+    )
+    assert result.positions.loc[dates[3], "A"] == 0.0
+    assert result.positions.loc[dates[3], "B"] == 1.0
+    assert result.nav.iloc[-1] == 0.5
+
+
+@pytest.mark.parametrize("cost_bps", [10000.0, 1e300])
+def test_unpayable_transaction_cost_cannot_exhaust_or_reverse_nav(cost_bps) -> None:
+    scores, returns, _ = _deterministic_inputs()
+    returns["ret_1d"] = 0.0
+    with pytest.raises(ValueError, match="transaction cost"):
+        run_long_only_topk(scores, returns, top_k=1, max_weight=1.0, cost_bps=cost_bps)
+
+
+def test_large_payable_fee_is_not_arbitrarily_capped() -> None:
+    scores, returns, _ = _deterministic_inputs()
+    returns["ret_1d"] = 0.0
+    result = run_long_only_topk(
+        scores, returns, top_k=1, rebalance_freq=2, max_weight=1.0, cost_bps=4000.0
+    )
+    assert result.nav.iloc[-1] == pytest.approx(0.6 * 0.2)
+    assert (result.positions >= 0).all().all()
+
+
+def test_huge_finite_fee_rate_without_execution_has_no_cost() -> None:
+    scores, returns, _ = _deterministic_inputs()
+    result = run_long_only_topk(
+        scores.iloc[:2], returns.iloc[:2], top_k=1, max_weight=1.0, cost_bps=1e300
+    )
+    assert result.nav.iloc[-1] == 1.0
+    assert result.turnover.sum() == 0.0
+
+
+@pytest.mark.parametrize("cost_bps", [0.0, 4000.0])
+def test_finite_daily_returns_cannot_overflow_accumulated_nav(cost_bps) -> None:
+    scores, returns, dates = _deterministic_inputs()
+    returns["ret_1d"] = 0.0
+    returns.loc[(dates[2], "A"), "ret_1d"] = 1e200
+    returns.loc[(dates[3], "A"), "ret_1d"] = 1e200
+    with pytest.raises(RuntimeError, match="NAV"):
+        run_long_only_topk(scores, returns, top_k=1, max_weight=1.0, cost_bps=cost_bps)
+
+
+def test_zero_nav_from_binary64_accumulation_is_preserved() -> None:
+    dates = pd.bdate_range("2024-01-02", periods=100, name="date")
+    scores = _panel(pd.DataFrame({"A": 1.0}, index=dates), "score")
+    returns = _panel(pd.DataFrame({"A": -0.99999}, index=dates), "ret_1d")
+    result = run_long_only_topk(scores, returns, top_k=1, max_weight=1.0, cost_bps=0.0)
+    assert result.nav.iloc[-1] == 0.0
+    assert (result.nav >= 0).all()
