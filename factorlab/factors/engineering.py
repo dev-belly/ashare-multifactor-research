@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict, List
 
 import pandas as pd
@@ -168,20 +169,27 @@ def build_factor_panel(
     return base
 
 
-def save_factor_panel(panel: pd.DataFrame, path: str) -> None:
-    """保存因子面板（parquet 优先，CSV 备用）。"""
-    try:
+def save_factor_panel(panel: pd.DataFrame, path: str | Path) -> None:
+    """按扩展名保存因子面板；缺少 Parquet 引擎时请显式选择 CSV。
+
+    不在 Parquet 写入失败后把 CSV 内容写入同名文件，否则读取方会把
+    CSV 当作 Parquet，且权限或数据编码错误也会被静默掩盖。
+    """
+    path = Path(path)
+    if path.suffix.lower() == ".parquet":
         panel.reset_index().to_parquet(path, engine="pyarrow", index=False)
-    except Exception:
+    else:
         panel.reset_index().to_csv(path, index=False)
 
 
-def load_factor_panel(path: str) -> pd.DataFrame:
+def load_factor_panel(path: str | Path) -> pd.DataFrame:
     """加载因子面板。"""
-    if path.endswith(".parquet"):
+    path = Path(path)
+    if path.suffix.lower() == ".parquet":
         df = pd.read_parquet(path)
     else:
-        df = pd.read_csv(path, parse_dates=["date"])
+        # 股票代码是标识符，不能把 000001 自动推断成整数 1。
+        df = pd.read_csv(path, parse_dates=["date"], dtype={"code": str})
     if "date" in df.columns and "code" in df.columns:
         df = df.set_index(["date", "code"])
     return df
