@@ -64,7 +64,7 @@
     <polyline fill="none" stroke="url(#lineC)" stroke-width="2" points="20,224 70,218 120,210 170,200 220,190 270,178 320,164 370,150 420,134"/>
     <!-- 基准虚线 -->
     <polyline fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="5 5" points="20,200 420,200"/>
-    <text x="430" y="205" fill="#64748b" font-size="12">benchmark</text>
+    <text x="410" y="195" fill="#94a3b8" font-size="12" text-anchor="end">benchmark</text>
     <text x="24" y="34" fill="#94a3b8" font-size="13" font-weight="600">模型样本外净值 (OOS NAV)</text>
   </g>
 
