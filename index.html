@@ -28,8 +28,8 @@
   .logo .mark{flex:0 0 42px;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#38bdf8,#6366f1);box-shadow:0 8px 22px -6px rgba(99,102,241,0.6);}
   header.head h1{margin:0;font-size:clamp(1.74rem,4.8vw,4.4rem);font-weight:760;letter-spacing:-.06em;line-height:1.14;}
   header.head h1 span{background:linear-gradient(135deg,#285abc,#60448d);-webkit-background-clip:text;background-clip:text;color:transparent;}
-  .sub{color:var(--muted);font-size:13px;line-height:1.7;}
-  .badge{display:inline-block;background:#fff;border:1px solid var(--line);color:var(--cyan);border-radius:999px;padding:3px 11px;font-size:14px;margin:0 8px 8px 0;}
+  .sub{display:flex;flex-wrap:wrap;gap:8px;color:var(--muted);font-size:13px;line-height:1.7;}
+  .badge{max-width:100%;overflow-wrap:anywhere;background:#fff;border:1px solid var(--line);color:var(--cyan);border-radius:999px;padding:3px 11px;font-size:14px;}
   h2.sec{font-size:17px;font-weight:730;margin:33px 0 14px;color:var(--txt);}
   .glass{border-radius:20px;border:1px solid var(--line);background:var(--panel);box-shadow:0 5px 22px #19356d0a;}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
@@ -42,6 +42,8 @@
   .chart{width:100%;height:360px;}
   .chart.tall{height:430px;}
   table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;}
+  .table-scroll{overflow-x:auto;}
+  .table-scroll:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;}
   th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:right;}
   th:first-child,td:first-child{text-align:left;}
   thead th{color:var(--muted);font-weight:600;}
@@ -71,11 +73,13 @@
     <div class="note">策略净值基于样本外扩张窗口：训练标签在折边界净化，T 日信号于下一交易日收盘执行，随后才承担收益，并按单边费率扣费；等权基准无成本。</div>
   </div>
 
-  <h2 class="sec">因子 IC 排行榜</h2>
+  <h2 class="sec" id="ic-heading">因子 IC 排行榜</h2>
   <div class="glass card">
-    <table id="icTable"><thead><tr>
-      <th>因子</th><th>方法</th><th>IC 均值</th><th>|IC|</th><th>IC_IR</th><th>IC&gt;0 占比</th>
-    </tr></thead><tbody></tbody></table>
+    <div class="table-scroll" tabindex="0" role="region" aria-labelledby="ic-heading">
+      <table id="icTable"><thead><tr>
+        <th>因子</th><th>方法</th><th>IC 均值</th><th>|IC|</th><th>IC_IR</th><th>IC&gt;0 占比</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
     <div class="note">仅使用各 fold 的 OOS 测试日期。IC_IR = IC 均值 / IC 标准差，是研究诊断，不等同于可交易 Alpha。</div>
   </div>
 
