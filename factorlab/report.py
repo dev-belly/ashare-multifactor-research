@@ -66,13 +66,13 @@ _ECHARTS_THEME = """
   echarts.registerTheme('factorlab', {
     color:['#38bdf8','#34d399','#f59e0b','#a78bfa','#f472b6','#22d3ee','#fb7185'],
     backgroundColor:'transparent',
-    textStyle:{color:'#cbd5e1',fontFamily:'Inter, -apple-system, sans-serif'},
-    title:{textStyle:{color:'#e2e8f0',fontWeight:600}},
-    legend:{textStyle:{color:'#94a3b8',fontSize:12},inactiveColor:'#475569'},
-    categoryAxis:{axisLine:{lineStyle:{color:'#2a3650'}},axisTick:{show:false},axisLabel:{color:'#64748b',fontSize:11},splitLine:{show:false,lineStyle:{color:'rgba(148,163,184,0.06)'}}},
-    valueAxis:{axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#64748b',fontSize:11},splitLine:{lineStyle:{color:'rgba(148,163,184,0.08)'}}},
-    timeAxis:{axisLine:{lineStyle:{color:'#2a3650'}},axisLabel:{color:'#64748b',fontSize:11},splitLine:{show:false}},
-    tooltip:{backgroundColor:'rgba(10,15,28,0.94)',borderColor:'#2a3650',borderWidth:1,textStyle:{color:'#e2e8f0',fontSize:12},extraCssText:'border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,0.55);backdrop-filter:blur(10px);padding:10px 14px;'}
+    textStyle:{color:'#344466',fontFamily:'Inter, -apple-system, sans-serif'},
+    title:{textStyle:{color:'#21365a',fontWeight:600}},
+    legend:{textStyle:{color:'#516487',fontSize:12},inactiveColor:'#475569'},
+    categoryAxis:{axisLine:{lineStyle:{color:'#c6d4ee'}},axisTick:{show:false},axisLabel:{color:'#4a5973',fontSize:11},splitLine:{show:false,lineStyle:{color:'rgba(148,163,184,0.06)'}}},
+    valueAxis:{axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#4a5973',fontSize:11},splitLine:{lineStyle:{color:'rgba(148,163,184,0.08)'}}},
+    timeAxis:{axisLine:{lineStyle:{color:'#c6d4ee'}},axisLabel:{color:'#4a5973',fontSize:11},splitLine:{show:false}},
+    tooltip:{backgroundColor:'rgba(255,255,255,0.98)',borderColor:'#c6d4ee',borderWidth:1,textStyle:{color:'#21365a',fontSize:12},extraCssText:'border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,0.55);backdrop-filter:blur(10px);padding:10px 14px;'}
   });
 })();
 """
@@ -89,50 +89,47 @@ _TEMPLATE = r"""<!DOCTYPE html>
 <script src="https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js"></script>
 <style>
   :root{
-    --bg:#070b14; --panel:rgba(20,28,48,0.72); --panel2:rgba(12,18,32,0.62);
-    --line:rgba(148,163,184,0.12); --txt:#e5edf7; --muted:#8b98a9;
-    --cyan:#38bdf8; --violet:#a78bfa; --bull:#f43f5e; --bear:#10b981; --amber:#f59e0b;
+    --bg:#f5f7fb; --panel:#fff; --panel2:#f7faff;
+    --line:#dce4f1; --txt:#1a2540; --muted:#4a5973;
+    --cyan:#2457b6; --violet:#694db0; --bull:#a7374e; --bear:#14664e; --amber:#95501e;
   }
   *{box-sizing:border-box}
   html,body{margin:0;}
   body{
-    background:
-      radial-gradient(1100px 700px at 12% -8%, rgba(56,189,248,0.12), transparent 60%),
-      radial-gradient(900px 600px at 92% 4%, rgba(167,139,250,0.12), transparent 55%),
-      linear-gradient(180deg,#080d18 0%, #060912 100%);
-    background-attachment:fixed;
+    background:var(--bg);
     color:var(--txt);
     font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
   }
   .num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
   .wrap{max-width:1200px;margin:0 auto;padding:36px 22px 64px;}
-  header.head{display:flex;flex-direction:column;gap:14px;padding-bottom:22px;margin-bottom:8px;border-bottom:1px solid var(--line);}
+  header.head{display:flex;flex-direction:column;gap:14px;padding:clamp(18px,5vw,55px);margin-bottom:15px;border:1px solid var(--line);border-radius:26px;background:radial-gradient(ellipse at 94% 100%,#e5edff,transparent 69%),#fff;}
   .logo{display:flex;align-items:center;gap:12px;}
-  .logo .mark{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#38bdf8,#6366f1);box-shadow:0 8px 22px -6px rgba(99,102,241,0.6);}
-  header.head h1{margin:0;font-size:26px;font-weight:800;letter-spacing:.3px;}
-  header.head h1 span{background:linear-gradient(135deg,#38bdf8,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .logo .mark{flex:0 0 42px;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#38bdf8,#6366f1);box-shadow:0 8px 22px -6px rgba(99,102,241,0.6);}
+  header.head h1{margin:0;font-size:clamp(1.74rem,4.8vw,4.4rem);font-weight:760;letter-spacing:-.06em;line-height:1.14;}
+  header.head h1 span{background:linear-gradient(135deg,#285abc,#60448d);-webkit-background-clip:text;background-clip:text;color:transparent;}
   .sub{color:var(--muted);font-size:13px;line-height:1.7;}
-  .badge{display:inline-block;background:rgba(12,18,32,0.6);border:1px solid var(--line);color:var(--cyan);border-radius:999px;padding:3px 11px;font-size:12px;margin:0 8px 8px 0;}
-  h2.sec{font-size:17px;font-weight:700;margin:34px 0 14px;padding-left:12px;border-left:3px solid var(--cyan);color:#eef4fb;}
-  .glass{border-radius:16px;border:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--panel2));backdrop-filter:blur(14px);box-shadow:0 1px 0 0 rgba(255,255,255,0.04) inset,0 20px 50px -18px rgba(2,6,23,0.7);}
+  .badge{display:inline-block;background:#fff;border:1px solid var(--line);color:var(--cyan);border-radius:999px;padding:3px 11px;font-size:14px;margin:0 8px 8px 0;}
+  h2.sec{font-size:17px;font-weight:730;margin:33px 0 14px;color:var(--txt);}
+  .glass{border-radius:20px;border:1px solid var(--line);background:var(--panel);box-shadow:0 5px 22px #19356d0a;}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
   .kpi{position:relative;overflow:hidden;padding:18px 18px 16px;}
   .kpi .accent{position:absolute;top:0;left:0;height:3px;width:100%;background:linear-gradient(90deg,var(--cyan),transparent);}
   .kpi .label{color:var(--muted);font-size:12px;margin-bottom:10px;}
-  .kpi .val{font-size:26px;font-weight:800;}
+  .kpi .val{font-size:clamp(1.2rem,3vw,1.75rem);font-weight:760;overflow-wrap:anywhere;}
   .kpi .meta{color:var(--muted);font-size:12px;margin-top:8px;}
-  .card{padding:18px;margin-top:14px;}
+  .card{padding:clamp(10px,2vw,18px);margin-top:14px;min-width:0;overflow-x:auto;}
   .chart{width:100%;height:360px;}
   .chart.tall{height:430px;}
   table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;}
   th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:right;}
   th:first-child,td:first-child{text-align:left;}
   thead th{color:var(--muted);font-weight:600;}
-  tbody tr:hover{background:rgba(255,255,255,0.03);}
+  tbody tr:hover{background:#f1f5ff;}
   .pos{color:var(--bull);} .neg{color:var(--bear);}
   .note{color:var(--muted);font-size:12px;margin-top:10px;line-height:1.6;}
   footer{margin-top:48px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:12px;line-height:1.8;}
-  @media(max-width:860px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:860px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:550px){.wrap{padding:18px 12px 35px}.logo{align-items:flex-start}th,td{padding-inline:5px}.chart.tall{height:360px}}
 </style>
 </head>
 <body>
@@ -187,13 +184,24 @@ _TEMPLATE = r"""<!DOCTYPE html>
 <script>
 __ECHARTS_THEME__
 const DATA = __DATA__;
-const C = {bg:'#070b14',line:'rgba(148,163,184,0.12)',txt:'#e5edf7',muted:'#8b98a9',
-  cyan:'#38bdf8',violet:'#a78bfa',bull:'#f43f5e',bear:'#10b981',amber:'#f59e0b',gold:'#f59e0b'};
+const C = {bg:'#f5f7fb',line:'#dce4f1',txt:'#1a2540',muted:'#4a5973',
+  cyan:'#2457b6',violet:'#694db0',bull:'#a7374e',bear:'#14664e',amber:'#95501e',gold:'#95501e'};
 const MODEL_COLORS = {benchmark:'#94a3b8',eq_weight:'#38bdf8',elastic_net:'#34d399',lightgbm:'#f59e0b',deep:'#a78bfa'};
 const MODEL_LABEL = {benchmark:'股票池等权（无成本）',eq_weight:'等权复合',elastic_net:'ElasticNet',lightgbm:'LightGBM',deep:'深度学习(MLP)'};
 
 function asRecord(value){return value && typeof value==='object' && !Array.isArray(value) ? value : {};}
 function asArray(value){return Array.isArray(value) ? value : [];}
+function escapeText(value){
+  const escaped = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+  return String(value ?? '').replace(/[&<>"']/g, character => escaped[character]);
+}
+function allDates(series){
+  return [...new Set(series.flatMap(row => asArray(row.dates)))].sort();
+}
+function alignValues(series, dates){
+  const byDate = new Map(asArray(series.dates).map((date, index) => [date, asArray(series.values)[index]]));
+  return dates.map(date => rounded(byDate.get(date)));
+}
 function asFinite(value){return typeof value==='number' && Number.isFinite(value) ? value : null;}
 function rounded(value,n=4){const finite=asFinite(value);return finite==null?null:+finite.toFixed(n);}
 function fmtPct(x,n=2){const finite=asFinite(x);return finite==null?'—':(finite*100).toFixed(n)+'%';}
@@ -205,13 +213,13 @@ function grad(color,a0,a1){return new echarts.graphic.LinearGradient(0,0,0,1,[{o
 // ---- meta ----
 const m = asRecord(DATA.meta);
 document.getElementById('meta').innerHTML =
-  `<span class="badge">数据源 ${m.data_source||'—'}</span>`+
-  `<span class="badge">样本 ${m.start_date||'—'} ~ ${m.end_date||'—'}</span>`+
-  `<span class="badge">股票池 ${m.universe_size||'—'}</span>`+
-  `<span class="badge">因子 ${m.n_factors||'—'}</span>`+
-  `<span class="badge">模型 ${asArray(m.models).join('/')}</span>`+
-  `<span class="badge">扩张窗口 ${m.n_folds||'—'} 折</span>`+
-  `<span class="badge">生成 ${m.generated_at||'—'}</span>`;
+  `<span class="badge">数据源 ${escapeText(m.data_source||'—')}</span>`+
+  `<span class="badge">样本 ${escapeText(m.start_date||'—')} ~ ${escapeText(m.end_date||'—')}</span>`+
+  `<span class="badge">股票池 ${escapeText(m.universe_size??'—')}</span>`+
+  `<span class="badge">因子 ${escapeText(m.n_factors??'—')}</span>`+
+  `<span class="badge">模型 ${escapeText(asArray(m.models).join('/'))}</span>`+
+  `<span class="badge">扩张窗口 ${escapeText(m.n_folds??'—')} 折</span>`+
+  `<span class="badge">生成 ${escapeText(m.generated_at||'—')}</span>`;
 
 // ---- KPI ----
 const nav = asRecord(DATA.model_nav);
@@ -238,23 +246,16 @@ const kpis = [
 ];
 document.getElementById('kpis').innerHTML = kpis.map((k,i)=>
   `<div class="glass kpi"><div class="accent" style="background:linear-gradient(90deg,${k.c},transparent)"></div>`+
-  `<div class="label">${k.label}</div><div class="val num" style="color:${k.c}">${k.val}</div><div class="meta">${k.meta}</div></div>`).join('');
+  `<div class="label">${escapeText(k.label)}</div><div class="val num" style="color:${k.c}">${escapeText(k.val)}</div><div class="meta">${escapeText(k.meta)}</div></div>`).join('');
 
 // ---- NAV chart ----
 const navChart = echarts.init(document.getElementById('navChart'),'factorlab');
 const models = Object.keys(nav);
-const firstNav = models.length ? asRecord(asRecord(nav[models[0]]).nav) : {};
-const baseDates = Array.isArray(firstNav.dates) ? firstNav.dates : [];
+const baseDates = allDates(models.map(k => asRecord(asRecord(nav[k]).nav)));
 const seriesNav = models.map(k=>{
   const modelNav = asRecord(asRecord(nav[k]).nav);
-  const dates = Array.isArray(modelNav.dates) ? modelNav.dates : [];
-  const values = Array.isArray(modelNav.values) ? modelNav.values : [];
-  const valuesByDate = new Map(dates.map((d,i)=>[d,values[i]]));
   const color = MODEL_COLORS[k]||'#888';
-  const vals = baseDates.map(d=>{
-    const value = valuesByDate.get(d);
-    return rounded(value);
-  });
+  const vals = alignValues(modelNav, baseDates);
   return {name:MODEL_LABEL[k]||k, type:'line', showSymbol:false, smooth:true,
     lineStyle:{width:2.4,color,shadowColor:color,shadowBlur:10}, itemStyle:{color},
     areaStyle:{color:grad(color,0.10,0)}, data:vals};
@@ -273,7 +274,7 @@ navChart.setOption({
 const tb = document.querySelector('#icTable tbody');
 tb.innerHTML = ic.map(r=>{
   const irCls = r.ir>=0?'pos':'neg';
-  return `<tr><td>${r.factor}</td><td>${r.method}</td>`+
+  return `<tr><td>${escapeText(r.factor)}</td><td>${escapeText(r.method)}</td>`+
     `<td class="${cls(r.ic_mean)} num">${fmtNum(r.ic_mean,3)}</td>`+
     `<td class="num">${fmtNum(r.abs_ic_mean,3)}</td>`+
     `<td class="${irCls} num">${fmtNum(r.ir,3)}</td>`+
@@ -297,15 +298,15 @@ fkeys.forEach((f,fi)=>{
 const decayChart = echarts.init(document.getElementById('decayChart'),'factorlab');
 decayChart.setOption({
   backgroundColor:'transparent',
-  tooltip:{position:'top',formatter:p=>`${fkeys[p.value[1]]} · lag ${p.value[0]+1}<br/>RankIC: <b>${p.value[2]}</b>`},
+  tooltip:{position:'top',formatter:p=>`${escapeText(fkeys[p.value[1]])} · lag ${p.value[0]+1}<br/>RankIC: <b>${p.value[2]}</b>`},
   grid:{left:80,right:20,top:20,bottom:60},
   xAxis:{type:'category',data:Array.from({length:maxLag},(_,i)=>i+1),name:'滞后(天)',
     axisLabel:{color:C.muted},axisLine:{lineStyle:{color:C.line}}},
   yAxis:{type:'category',data:fkeys,axisLabel:{color:C.muted},axisLine:{lineStyle:{color:C.line}}},
   visualMap:{min:dmin,max:dmax,calculable:true,orient:'horizontal',
     left:'center',bottom:10,textStyle:{color:C.muted},itemWidth:12,itemHeight:160,
-    inRange:{color:['#1d4ed8','#0b1220','#f43f5e']}},
-  series:[{type:'heatmap',data:hd,itemStyle:{borderColor:'#0a0f1c',borderWidth:2,borderRadius:4},emphasis:{itemStyle:{borderColor:'#fff',borderWidth:1}}}]
+    inRange:{color:['#2854ab','#f0f3f9','#a6374d']}},
+  series:[{type:'heatmap',data:hd,itemStyle:{borderColor:'#fff',borderWidth:2,borderRadius:4},emphasis:{itemStyle:{borderColor:'#fff',borderWidth:1}}}]
 });
 
 // ---- group long-short (top factor) ----
@@ -315,15 +316,15 @@ const groupChart = echarts.init(document.getElementById('groupChart'),'factorlab
 if(topF){
   const g = asRecord(gr[topF]);
   const longShort = asRecord(g.long_short);
-  const dates = asArray(longShort.dates);
   const groups = asRecord(g.groups);
   const gs = Object.keys(groups).sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)));
+  const dates = allDates([longShort, ...gs.map(key => asRecord(groups[key]))]);
   const palette=[C.bear,'#7dd3a0','#9aa7b8','#f0a',C.bull];
   const s = gs.map((gn,i)=>({name:gn,type:'line',showSymbol:false,smooth:true,
-    lineStyle:{width:1.5,color:palette[i%palette.length]},data:asArray(asRecord(groups[gn]).values).map(v=>rounded(v))}));
+    lineStyle:{width:1.5,color:palette[i%palette.length]},data:alignValues(asRecord(groups[gn]), dates)}));
   s.push({name:'多空(L-S)',type:'line',showSymbol:false,smooth:true,
     lineStyle:{width:3,color:C.violet,shadowColor:C.violet,shadowBlur:12},itemStyle:{color:C.violet},
-    areaStyle:{color:grad(C.violet,0.14,0)},data:asArray(longShort.values).map(v=>rounded(v))});
+    areaStyle:{color:grad(C.violet,0.14,0)},data:alignValues(longShort, dates)});
   groupChart.setOption({
     backgroundColor:'transparent',tooltip:{trigger:'axis',axisPointer:{type:'line',lineStyle:{color:'#334155'}}},legend:{textStyle:{color:C.muted},top:0},
     grid:{left:55,right:20,top:36,bottom:30},
@@ -342,7 +343,7 @@ const cost = asRecord(DATA.cost_scenarios);
 const costKeys = Object.keys(cost).sort((a,b)=>Number(a)-Number(b));
 const bps = costKeys.map(Number);
 const costChart = echarts.init(document.getElementById('costChart'),'factorlab');
-const cm = costKeys.length ? Object.keys(asRecord(cost[costKeys[0]])) : [];
+const cm = [...new Set(costKeys.flatMap(key => Object.keys(asRecord(cost[key]))))];
 const cs = cm.map(k=>{const color=MODEL_COLORS[k]||'#888';return {name:MODEL_LABEL[k]||k,type:'line',showSymbol:true,symbolSize:7,smooth:true,
   lineStyle:{width:2.4,color,shadowColor:color,shadowBlur:8},itemStyle:{color},
   data:costKeys.map(key=>rounded(asRecord(asRecord(cost[key])[k]).annual_return))};});
@@ -370,7 +371,7 @@ robChart.setOption({
   series:[mkSeries('bull',C.bull),mkSeries('neutral',C.cyan),mkSeries('bear',C.bear)]
 });
 
-document.getElementById('footer').innerHTML =
+document.getElementById('footer').textContent =
   '本报告由 FactorLab 自动生成 · 研究用途，非投资建议。'+
   '模型策略使用扩张窗口 OOS、折边界净化、下一交易日收盘执行与交易成本；因子 IC、衰减和每日分组是 OOS 日期上的无成本诊断。'+
   '数据源：'+(m.actual_data_source||m.data_source||'—')+'；AkShare 完整财务字段尚未标准化，严格模式会拒绝不完整实数运行。';
