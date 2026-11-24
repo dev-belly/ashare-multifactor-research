@@ -175,3 +175,31 @@ def test_report_embeds_results_as_utf8_json(tmp_path: Path) -> None:
 
     assert "__DATA__" not in html
     assert json.dumps(results, ensure_ascii=False) in html
+
+
+def test_report_retains_unshared_dates_and_models(tmp_path: Path) -> None:
+    results = _pipeline_result_schema()
+    late_series = {"dates": ["2024-01-04"], "values": [1.1]}
+    results["model_nav"]["deep"] = {"nav": late_series}
+    results["group_returns"]["ep"]["groups"]["G1"] = late_series
+    results["cost_scenarios"]["10.0"]["deep"] = {"annual_return": 0.06}
+
+    generated = build_report(results, tmp_path / "partial-series.html")
+    report_script = _inline_report_script(generated.read_text(encoding="utf-8"))
+    assertions = r"""
+const dates = ['2024-01-02','2024-01-03','2024-01-04'];
+const navOption = chartOptions.get('navChart');
+const groupOption = chartOptions.get('groupChart');
+const costOption = chartOptions.get('costChart');
+const match = (value, expected) => JSON.stringify(value) === JSON.stringify(expected);
+if (!match(navOption.xAxis.data, dates) || !match(navOption.series[1].data, [null,null,1.1])) {
+  throw new Error('NAV lost a date or imputed a missing observation');
+}
+if (!match(groupOption.xAxis.data, dates) || !match(groupOption.series[0].data, [null,null,1.1])) {
+  throw new Error('Group returns were misaligned');
+}
+if (!match(costOption.series[1].data, [null,0.06])) {
+  throw new Error('Cost scenario lost a model missing from the first scenario');
+}
+"""
+    _execute_report_script(report_script, assertions)
